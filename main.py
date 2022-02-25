@@ -33,7 +33,8 @@ def main():
 
     # camera
     cameraPos = Vector3(0.1, 0, 10)
-    cameraRotation = Vector3(0, 0.8, 0)
+    cameraRotation = Vector3(0, 0., 0)
+    cameraSpeed = Vector3(0., 0., 0.)
     farPlane = 20
     squaresPerRow = 20
 
@@ -61,6 +62,15 @@ def main():
             cameraRotation.z += 0.1 
         if keys[pygame.K_q]:
             cameraRotation.z -= 0.1
+        if keys[pygame.K_SPACE]:
+            cameraSpeed.z = .5
+
+        surfaceHeight = getHeightAt(int(cameraPos.x), int(cameraPos.y)) + 1.5
+        cameraPos += cameraSpeed
+        cameraSpeed.z -= .05
+        if (cameraPos.z) < surfaceHeight:
+            cameraPos.z = surfaceHeight
+            cameraSpeed.z = 0.
         # cameraBoundarySide = Vector2(0, squaresPerRow//2).rotate_rad(cameraRotation.z)
         # cameraBoundaryFront = Vector2(farPlane, 0).rotate_rad(cameraRotation.z)
         # cameraBoundary = (cameraPos.xy - cameraBoundarySide + cameraBoundaryFront, 
