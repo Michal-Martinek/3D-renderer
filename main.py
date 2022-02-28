@@ -4,32 +4,34 @@ import noise
 import math
 import functools
 
-from render import drawTerrainCollored, Triangle3, Triangle2
+from render import drawTerrainCollored, Triangle2, render
 
-
+pygame.init()
 
 @ functools.lru_cache(1000)
-def getHeightAt(x: int, y: int, tileSize=8):
+def getPointAtCoord(x: int, y: int, tileSize=8):
     val = noise.pnoise2(x / tileSize, y / tileSize)
     # val = val * -10 - 8.
     val = (val + 0.75) / 1.5
     val *= 8.
     # val = -10
-    return val
-
-def getPointAtCoord(x, y):
-    return pygame.math.Vector3(x, y, getHeightAt(x, y))
+    return pygame.math.Vector3(x, y, val)
 
 def getSquareTriangles(x, y):
-    p1, p2, p3, p4 = getPointAtCoord(x, y), getPointAtCoord(x+1, y), getPointAtCoord(x+1, y+1), getPointAtCoord(x, y+1)
-    return Triangle3(p1, p2, p3), Triangle3(p1, p3, p4)
+    p1 = getPointAtCoord(x, y)
+    p2 = getPointAtCoord(x+1, y)
+    p3 = getPointAtCoord(x+1, y+1)
+    p4 = getPointAtCoord(x, y+1)
+    return (p1, p2, p3), (p1, p3, p4)
 
 def main():
     # pygame
     screenSize = 700
     display = pygame.display.set_mode((screenSize, screenSize), pygame.DOUBLEBUF)
     pygame.event.set_allowed([pygame.QUIT, pygame.KEYDOWN])
-    
+    frameClock = pygame.time.Clock()
+
+    # TODO: use the fogSurface
     fogSurface = pygame.Surface((screenSize, screenSize))
     fogSurface.fill((2,204,254))
     fogSurface.set_alpha(15)
@@ -77,12 +79,10 @@ def main():
                 airTime = True
         
 
-        surfaceHeight = getHeightAt(int(cameraPos.x), int(cameraPos.y)) + 1.5
+        surfaceHeight = getPointAtCoord(int(cameraPos.x), int(cameraPos.y)).z + 1.5
         cameraPos += cameraSpeed
         cameraSpeed.z -= .05
 
-        # if airTime and cameraPos.z < surfaceHeight:
-        #     cameraPos.z = surfaceHeight
         if not airTime and cameraPos.z <= surfaceHeight + .5:
             cameraPos.z = surfaceHeight
             cameraSpeed.z -= 0.3
@@ -104,14 +104,16 @@ def main():
 
         triangles2 = []
         for t in triangles:
-            triangles2.append(t.render(cameraPos, cameraRotation, screenSize))
+            triangles2.append(render(t, cameraPos, cameraRotation, screenSize))
         triangles = list(filter(lambda t: t.shouldDraw(screenSize), triangles2))
 
         display.fill((2,204,254))
         drawTerrainCollored(triangles, display)
 
         pygame.display.update()
-        pygame.time.Clock().tick(30)
+        frameClock.tick(30)
+
+        print(f'{frameClock.get_fps():.1f}')
     pygame.quit()
 
 
