@@ -7,20 +7,19 @@ point = Vector3
 invalidPoint = Vector2(-1000)
 
 # render ------------------------------
-def renderPoint(p: point, cameraPos: point, cameraRotation: Vector3, screenSize: int):
+def renderPoint(p: point, cameraPos: point, cameraRotation: Vector3, screenSize: Vector2, fov: int = 1.):
     '''renders point onto screen, if it\'s behind screen returns invalid point'''
     p = p - cameraPos
     p.rotate_z_ip_rad(-cameraRotation.z)
     p.rotate_y_ip_rad(-cameraRotation.y)
     p.rotate_x_ip_rad(-cameraRotation.x)    
     if p.x > 0:
-        p = (p / p.x) * (screenSize//2)
-        p = Vector2(p.y, -p.z) + Vector2(screenSize//2)
-        return p
+        p /= fov * p.x
+        return Vector2(p.y * screenSize.x, -p.z * screenSize.y) + screenSize
     return invalidPoint
 
 # draw ----------------------
-def drawTriangles(triangles: tuple[tuple[point]], display, color=(0, 160, 30), boundaryColor=(0, 0, 0)):
+def drawTriangles(triangles: tuple[tuple[point]], display, color=(0, 160, 30)):
     for t in triangles:
         draw.polygon(display, color, t)
         # draw.polygon(display, boundaryColor, t, 3)
@@ -31,10 +30,10 @@ def drawTerrainCollored(triangles: tuple[tuple[point]], display, boundaryColor=(
         # color = (0, 180, 30)
         try:
             draw.polygon(display, color, t.points)
-            # draw.polygon(display, boundaryColor, t.points, 1)
-        except ValueError: # TODO: this should be handled properly
+            # draw.polygon(display, (0, 0, 0), t.points, 1)
+        except ValueError as e: # TODO: this should be handled properly
             print(color)
-            exit(1)
+            raise e
 
 
 
@@ -58,7 +57,7 @@ class Triangle2:
         '''returns whether this triangle should be drawn'''
         return self.onScreen(screenSize) and self.clockwise()
 
-def render(points: tuple[point, point, point], cameraPos: point, cameraRotation: tuple[float, float, float], screenSize: int) -> Triangle2:
+def render(points: tuple[point, point, point], cameraPos: point, cameraRotation: tuple[float, float, float], screenSize: Vector2) -> Triangle2:
     p1 = renderPoint(points[0], cameraPos, cameraRotation, screenSize)
     p2 = renderPoint(points[1], cameraPos, cameraRotation, screenSize)
     p3 = renderPoint(points[2], cameraPos, cameraRotation, screenSize)

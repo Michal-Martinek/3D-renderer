@@ -4,18 +4,21 @@ import noise
 import math
 import functools
 
+from copy import deepcopy
+
 from render import drawTerrainCollored, Triangle2, render
 
 pygame.init()
 
 @ functools.lru_cache(1000)
 def getPointAtCoord(x: int, y: int, tileSize=8):
-    val = noise.pnoise2(x / tileSize, y / tileSize)
-    # val = val * -10 - 8.
+    val = noise.pnoise2(x / tileSize, y / tileSize, octaves=2)
+    # normalize then scale
     val = (val + 0.75) / 1.5
     val *= 8.
-    # val = -10
     return pygame.math.Vector3(x, y, val)
+def rotatePoint(p: Vector3, rot: Vector3):
+    return p.rotate_z_rad(rot.z).rotate_y_rad(rot.y).rotate_x_rad(rot.x)
 
 def getSquareTriangles(x, y):
     p1 = getPointAtCoord(x, y)
@@ -38,7 +41,7 @@ def main():
 
     # camera
     cameraPos = Vector3(0.1, 0, 10)
-    cameraRotation = Vector3(0, 0., 0)
+    cameraRotation = Vector3(0, 0, 0.01)
     cameraSpeed = Vector3(0., 0., 0.)
     space = False
     airTime = True
@@ -58,6 +61,7 @@ def main():
                 if event.key == pygame.K_SPACE:
                     space = True
         
+        # controls
         keys = pygame.key.get_pressed()
         if keys[pygame.K_w]:
             cameraPos.xy += Vector2(math.cos(cameraRotation.z), math.sin(cameraRotation.z))
@@ -78,8 +82,25 @@ def main():
                 cameraSpeed.z = .5
                 airTime = True
         
+        # # rendering
+        fov = 1.
+        screenRect3d = [Vector3(fov, -1, 1), Vector3(fov, 1, 1), Vector3(fov, 1, -1), Vector3(fov, -1, -1)]
+        closePlanePoints = [rotatePoint(p, cameraPos) for p in screenRect3d]
+        farPlanePoints  = deepcopy(closePlanePoints)
+        [p.scale_to_length(farPlane) for p in farPlanePoints]
+        farPlanePoints = [p + cameraPos for p in farPlanePoints]
+        closePlanePoints = [p + cameraPos for p in closePlanePoints]
 
-        surfaceHeight = getPointAtCoord(int(cameraPos.x), int(cameraPos.y)).z + 1.5
+        minX, maxX = min(closePlanePoints+farPlanePoints, key=lambda p: p.x), max(closePlanePoints+farPlanePoints, key=lambda p: p.x)
+        minY, maxY = min(closePlanePoints+farPlanePoints, key=lambda p: p.y), max(closePlanePoints+farPlanePoints, key=lambda p: p.y)
+
+        # for x in range(int(minX.x), int(maxX.x)):
+        #     for y in range(int(minY.y), int(minY.y)):
+        #         pass
+
+
+        t1, t2 = getSquareTriangles(int(cameraPos.x), int(cameraPos.y))
+        surfaceHeight = max((*t1, *t2), key=lambda p: p.z).z + 1.5
         cameraPos += cameraSpeed
         cameraSpeed.z -= .05
 
@@ -104,7 +125,7 @@ def main():
 
         triangles2 = []
         for t in triangles:
-            triangles2.append(render(t, cameraPos, cameraRotation, screenSize))
+            triangles2.append(render(t, cameraPos, cameraRotation, Vector2(screenSize//2)))
         triangles = list(filter(lambda t: t.shouldDraw(screenSize), triangles2))
 
         display.fill((2,204,254))
@@ -112,8 +133,7 @@ def main():
 
         pygame.display.update()
         frameClock.tick(30)
-
-        print(f'{frameClock.get_fps():.1f}')
+        # print(f'{frameClock.get_fps():.1f}')
     pygame.quit()
 
 
