@@ -73,7 +73,7 @@ def main():
     airTime = True
 
     # rendering
-    farPlane = 20
+    farPlaneDistance = 20
     squaresPerRow = 20
     
 
@@ -123,9 +123,9 @@ def main():
 
         # rendering
         display.fill((2,204,254))
-        
-        closePlanePoints, farPlanePoints = getCameraPlanes(cameraPos, farPlane)
-        squares = getSquaresVisibleByCamera(closePlanePoints, farPlanePoints)
+
+        closePlane, farPlane = getCameraPlanes(cameraPos, farPlaneDistance)
+        squares = getSquaresVisibleByCamera(closePlane, farPlane)
         triangles = renderSquares(squares, cameraPos, cameraRotation, screenSize)
         drawTerrainCollored(triangles, display)
 

@@ -56,7 +56,7 @@ class Triangle2:
         ab = self.points[1] - self.points[0]
         ac = self.points[2] - self.points[0]
         return ab.cross(ac) >= 0
-    def shouldDraw(self, screenSize) -> bool:
+    def shouldDraw(self, screenSize: float) -> bool:
         '''returns whether this triangle should be drawn'''
         return self.onScreen(screenSize) and self.clockwise()
 
