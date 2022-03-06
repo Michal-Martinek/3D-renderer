@@ -24,10 +24,10 @@ def getSquareTriangles(x, y):
     p4 = getPointAtCoord(x, y+1)
     return (p1, p2, p3), (p1, p3, p4)
 
-def getCameraPlanes(cameraPos: point3, farPlaneDistance: float):
+def getCameraPlanes(cameraPos: point3, cameraRotation: Vector3, farPlaneDistance: float):
     fov = 1.
     screenRect3d = [Vector3(fov, -1, 1), Vector3(fov, 1, 1), Vector3(fov, 1, -1), Vector3(fov, -1, -1)]
-    closePlanePoints = [rotatePoint(p, cameraPos) for p in screenRect3d]
+    closePlanePoints = [rotatePoint(p, cameraRotation) for p in screenRect3d]
     farPlanePoints  = deepcopy(closePlanePoints)
     [p.scale_to_length(farPlaneDistance) for p in farPlanePoints]
     farPlanePoints = [p + cameraPos for p in farPlanePoints]
@@ -39,8 +39,8 @@ def getSquaresVisibleByCamera(closePlane: square, farPlane: square):
     minY, maxY = min(closePlane+farPlane , key=lambda p: p.y), max(closePlane+farPlane, key=lambda p: p.y)
 
     squares = []
-    for x in range(int(minX.x), int(maxX.x)):
-            squares.extend( [(x, y) for y in range(int(minY.y), int(maxY.y))] )
+    for x in range(int(minX.x - 1), int(maxX.x + 1)):
+            squares.extend( [(x, y) for y in range(int(minY.y - 1), int(maxY.y + 1))] )
     return squares
 def renderSquares(squares: list[square], cameraPos: point3, cameraRotation: Vector3, screenSize: float):
     squares.sort(key=lambda s: (cameraPos.x - s[0])**2 + (cameraPos.y - s[1])**2, reverse=True)
@@ -86,6 +86,8 @@ def main():
             elif event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_SPACE:
                     space = True
+                elif event.key == pygame.K_p:
+                    print(f'cameraPos {cameraPos}\ncameraRotation {cameraRotation}\ncameraPlanes\n{getCameraPlanes(cameraPos, cameraRotation, farPlaneDistance)}')
         
         # controls
         keys = pygame.key.get_pressed()
@@ -124,7 +126,7 @@ def main():
         # rendering
         display.fill((2,204,254))
 
-        closePlane, farPlane = getCameraPlanes(cameraPos, farPlaneDistance)
+        closePlane, farPlane = getCameraPlanes(cameraPos, cameraRotation, farPlaneDistance)
         squares = getSquaresVisibleByCamera(closePlane, farPlane)
         triangles = renderSquares(squares, cameraPos, cameraRotation, screenSize)
         drawTerrainCollored(triangles, display)
