@@ -3,6 +3,7 @@ from pygame.math import Vector3, Vector2
 import noise
 import math
 import functools
+import time
 from copy import deepcopy
 
 from render import drawTerrainCollored, Triangle2, render, square, point3
@@ -66,20 +67,29 @@ def main():
     fogSurface.set_alpha(15)
 
     # camera
-    cameraPos = Vector3(0.1, 0, 10)
+    cameraPos = Vector3(0.1, 0, getPointAtCoord(0, 0).z + 1)
     cameraRotation = Vector3(0, 0, 0.01)
-    cameraSpeed = Vector3(0., 0., 0.)
+    cameraSpeed = Vector3(0., 0., -1.)
     space = False
     airTime = True
 
     # rendering
     farPlaneDistance = 20
-    squaresPerRow = 20
+
+    # controls per second
+    cameraMovementSpeed = 5.
+    cameraRotationSpeed = 3. # radians
+    cameraJumpStartVelocity = 2.5
+    gravity = Vector3(0, 0, -2.)
     
-
-
+    # inner vars
+    startFrameTime = time.time()
     running = True
     while running:
+        x = startFrameTime
+        startFrameTime = time.time()
+        numSecsPassed = startFrameTime - x
+
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 running = False
@@ -90,34 +100,38 @@ def main():
                     print(f'cameraPos {cameraPos}\ncameraRotation {cameraRotation}\ncameraPlanes\n{getCameraPlanes(cameraPos, cameraRotation, farPlaneDistance)}')
         
         # controls
+        speedScalingFactor = cameraMovementSpeed * numSecsPassed
+        moveVectorForward = Vector2(math.cos(cameraRotation.z), math.sin(cameraRotation.z)) * speedScalingFactor
+        moveVectorSideways = Vector2(-math.sin(cameraRotation.z), math.cos(cameraRotation.z)) * speedScalingFactor
+
         keys = pygame.key.get_pressed()
         if keys[pygame.K_w]:
-            cameraPos.xy += Vector2(math.cos(cameraRotation.z), math.sin(cameraRotation.z))
+            cameraPos.xy += moveVectorForward
         if keys[pygame.K_s]:
-            cameraPos.xy -= Vector2(math.cos(cameraRotation.z), math.sin(cameraRotation.z))
+            cameraPos.xy -= moveVectorForward
         if keys[pygame.K_a]:
-            cameraPos.xy -= Vector2(-math.sin(cameraRotation.z), math.cos(cameraRotation.z))
+            cameraPos.xy -= moveVectorSideways
         if keys[pygame.K_d]:
-            cameraPos.xy += Vector2(-math.sin(cameraRotation.z), math.cos(cameraRotation.z))
+            cameraPos.xy += moveVectorSideways
         if keys[pygame.K_e]:
-            cameraRotation.z += 0.3 
+            cameraRotation.z += cameraRotationSpeed * numSecsPassed
         if keys[pygame.K_q]:
-            cameraRotation.z -= 0.3
+            cameraRotation.z -= cameraRotationSpeed * numSecsPassed
         if space:
             space = False
             if not airTime:
-                cameraSpeed.z = .5
+                cameraSpeed.z = cameraJumpStartVelocity
                 airTime = True
 
         # camera movement
         t1, t2 = getSquareTriangles(int(cameraPos.x), int(cameraPos.y))
         surfaceHeight = max((*t1, *t2), key=lambda p: p.z).z + 1.5
-        cameraPos += cameraSpeed
-        cameraSpeed.z -= .05
+        cameraPos += numSecsPassed * (cameraSpeed + gravity * numSecsPassed/2)
+        cameraSpeed += gravity * numSecsPassed
 
         if not airTime and cameraPos.z <= surfaceHeight + .5:
             cameraPos.z = surfaceHeight
-            cameraSpeed.z -= 0.3
+            cameraSpeed += gravity * 6
         elif cameraPos.z < surfaceHeight:
             cameraPos.z = surfaceHeight
             cameraSpeed.z = 0.
