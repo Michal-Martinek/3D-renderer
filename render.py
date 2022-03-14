@@ -9,6 +9,7 @@ triangle3 = tuple[point3, point3, point3]
 
 invalidPoint = Vector2(-1000)
 
+# TODO: remove deprecated functions
 # render ------------------------------
 def renderPoint(p: point3, cameraPos: point3, cameraRotation: Vector3, screenSize: Vector2, fov: float = 1.):
     '''renders point onto screen, if it\'s behind screen returns invalid point'''

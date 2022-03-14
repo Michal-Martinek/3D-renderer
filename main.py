@@ -9,6 +9,7 @@ from copy import deepcopy
 
 from render import drawTerrainCollored, Triangle2, render, square, point3
 
+# TODO: remove unused functions
 @ functools.lru_cache(1000)
 def getPointAtCoord(x: int, y: int, tileSize=8):
     val = noise.pnoise2(x / tileSize, y / tileSize, octaves=2)
@@ -26,11 +27,10 @@ def getSquareTriangles(x, y):
     p4 = getPointAtCoord(x, y+1)
     return (p1, p2, p3), (p1, p3, p4)
 
-# TODO: the fov here tells the distance of the close plane but somewhere ele it tells the field of view
-def getCameraPlanes(cameraPos: point3, cameraRotation: Vector3, farPlaneDistance: float, fov=1.):
-    screenRect3d = [Vector3(fov, -1, 1), Vector3(fov, 1, 1), Vector3(fov, 1, -1), Vector3(fov, -1, -1)]
+def getCameraPlanes(cameraPos: point3, cameraRotation: Vector3, farPlaneDistance: float, closePlaneDistance: float):
+    screenRect3d = [Vector3(closePlaneDistance, -1, 1), Vector3(closePlaneDistance, 1, 1), Vector3(closePlaneDistance, 1, -1), Vector3(closePlaneDistance, -1, -1)]
     closePlanePoints = [rotatePoint(p, cameraRotation) for p in screenRect3d]
-    farPlanePoints  = [p * (farPlaneDistance / fov) + cameraPos for p in closePlanePoints]
+    farPlanePoints  = [p * (farPlaneDistance / closePlaneDistance) + cameraPos for p in closePlanePoints]
     closePlanePoints = [p + cameraPos for p in closePlanePoints]
     return closePlanePoints, farPlanePoints
 
@@ -54,6 +54,9 @@ def renderSquares(squares: list[square], cameraPos: point3, cameraRotation: Vect
     triangles = list(filter(lambda t: t.shouldDraw(screenSize), triangles2))
     return triangles
 
+# TODO: move these functions to render.py
+
+# TODO: this func should use native numpy ops instead of a for-loop
 def getPointsArr(minX, minY, maxX, maxY):
     # [x, y, (x, y, z)] - 3D
     points = np.ndarray((maxX-minX, maxY-minY, 3))
@@ -83,7 +86,7 @@ def rotate_x(points, a):
     newPoints[:, :, 1] = points[:, :, 1] * cosVal - points[:, :, 2] * sinVal
     newPoints[:, :, 2] = points[:, :, 1] * sinVal + points[:, :, 2] * cosVal
     return newPoints
-def renderPointsArr(points, cameraPos, cameraRotation, screenSize, fov=1.):
+def renderPointsArr(points, cameraPos, cameraRotation, screenSize, closePlaneDistance):
     points -= np.array( ((cameraPos.xyz)) )
     # rotate
     # TODO: is the np.array mutable or not?
@@ -92,10 +95,8 @@ def renderPointsArr(points, cameraPos, cameraRotation, screenSize, fov=1.):
     points = rotate_x(points, -cameraRotation.x)
 
     points2D = points[:, :, 1:]
-    inFrontArr = points[:, :, :1] > 0 # TODO: maybe its not necesarry when we render ony those squares which are in front of the camera
-    temp = fov * points[:, :, 0]
-    temp = np.expand_dims(temp, 2)
-    points2D /= temp
+    inFrontArr = points[:, :, :1] > 0
+    points2D *= closePlaneDistance / points[:, :, :1]
     screenSize /= 2
     points2D *= np.array((((screenSize.x, -screenSize.y))))
     points2D += np.array(((screenSize.xy)))
@@ -111,7 +112,6 @@ def chopPointsIntoTris(points, screenSize):
             t1 = points[x, y, :], points[x+1, y, :], points[x+1, y+1, :]
             t2 = points[x, y, :], points[x+1, y+1, :], points[x, y+1, :]
             tris.append(Triangle2.fromArr(t1))
-            # print('t1:', Triangle2.fromArr(t1))
             tris.append(Triangle2.fromArr(t2))
     tris = list(filter(lambda t: t.shouldDraw(screenSize), tris))
     return tris
@@ -129,7 +129,7 @@ def main():
     fogSurface.set_alpha(15)
 
     # camera
-    cameraPos = Vector3(0.1, 0, getPointAtCoord(0, 0).z)
+    cameraPos = Vector3(0, 0, getPointAtCoord(0, 0).z)
     cameraRotation = Vector3(0, 0, 0)
     cameraSpeed = Vector3(0., 0., 0.)
     space = False
@@ -137,7 +137,7 @@ def main():
 
     # rendering
     farPlaneDistance = 20
-    fov = 1. # TODO: does the fov increase or decrease the size of the view?
+    closePlaneDistance = 1.
 
     # controls per second
     cameraMovementSpeed = 5.
@@ -204,26 +204,23 @@ def main():
         # rendering
         display.fill((2,204,254))
 
-        closePlane, farPlane = getCameraPlanes(cameraPos, cameraRotation, farPlaneDistance, fov)
+        closePlane, farPlane = getCameraPlanes(cameraPos, cameraRotation, farPlaneDistance, closePlaneDistance)
         
         # new
         minX, maxX = int(min(closePlane+farPlane, key=lambda p: p.x).x), int(max(closePlane+farPlane, key=lambda p: p.x).x) + 1
         minY, maxY = int(min(closePlane+farPlane , key=lambda p: p.y).y), int(max(closePlane+farPlane, key=lambda p: p.y).y)
 
         points = getPointsArr(minX, minY, maxX, maxY)
-        points = renderPointsArr(points, cameraPos, cameraRotation, Vector2((screenSize, screenSize)), fov)
+        points = renderPointsArr(points, cameraPos, cameraRotation, Vector2((screenSize, screenSize)), closePlaneDistance)
         triangles = chopPointsIntoTris(points, screenSize)
-        # print('count of triangles:', len(triangles))
         # TODO: readd colors
-        # TODO: fix camera rot and pos
+            # we would need an array of additional info - original distance from cam, original height
         # TODO: sort the triangles by distance from camera
-        # TODO: change fov into closePlaneDistance
         # TODO: somehow prevent rendering triangles which are too big
+        # TODO: don't render triangles which are fully behind another ones
+        # TODO: use numpy for generating triangle from points
         
         triangles = [[(int(p.x), int(p.y)) for p in t.points] for t in triangles]
-        # print('triangles:\n', triangles)
-        # squares = getSquaresVisibleByCamera(closePlane, farPlane)
-        # triangles = renderSquares(squares, cameraPos, cameraRotation, screenSize)
         drawTerrainCollored(triangles, display)
 
         pygame.display.update()
