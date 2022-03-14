@@ -29,12 +29,12 @@ def drawTriangles(triangles: list[triangle3], display, color=(0, 160, 30)):
 
 def drawTerrainCollored(triangles, display, boundaryColor=(0, 0, 0)):
     for t in triangles:
-        color = (0, 100 + int(t.originalHeight * 15), 30)
-        # color = (0, 180, 30)
+        # color = (0, 100 + int(t.originalHeight * 15), 30) # TODO: store the original height of the points somewhere
+        color = (0, 180, 30)
         try:
-            draw.polygon(display, color, t.points)
-            # draw.polygon(display, (0, 0, 0), t.points, 1)
-        except ValueError as e: # TODO: this should be handled properly
+            draw.polygon(display, color, t)
+            draw.polygon(display, boundaryColor, t, 1)
+        except ValueError as e: # TODO: this should be handled properly or even removed
             print(color)
             raise e
 
@@ -42,6 +42,10 @@ def drawTerrainCollored(triangles, display, boundaryColor=(0, 0, 0)):
 
 # classes ----------------------
 class Triangle2:
+    @ staticmethod
+    def fromArr(a):
+        return Triangle2(Vector2(*a[0]), Vector2(*a[1]), Vector2(*a[2]))
+
     def __init__(self, p1: Vector2, p2: Vector2, p3: Vector2, originalHeight=None) -> None:
         self.points = [p1, p2, p3]
         self.originalHeight = originalHeight

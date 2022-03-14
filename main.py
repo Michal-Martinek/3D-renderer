@@ -4,6 +4,7 @@ import noise
 import math
 import functools
 import time
+import numpy as np
 from copy import deepcopy
 
 from render import drawTerrainCollored, Triangle2, render, square, point3
@@ -54,6 +55,69 @@ def renderSquares(squares: list[square], cameraPos: point3, cameraRotation: Vect
         triangles2.append(render(t, cameraPos, cameraRotation, Vector2(screenSize//2)))
     triangles = list(filter(lambda t: t.shouldDraw(screenSize), triangles2))
     return triangles
+
+def getPointsArr(minX, minY, maxX, maxY):
+    # [x, y, (x, y, z)] - 3D
+    points = np.ndarray((maxX-minX, maxY-minY, 3))
+    for x in range(maxX-minX):
+        for y in range(maxY-minY):
+            points[x, y, :] = getPointAtCoord(x+minX, y+minY).xyz
+    return points
+
+def rotate_z(points, a):
+    newPoints = np.zeros_like(points)
+    cosVal, sinVal = math.cos(a), math.sin(a)
+    newPoints[:, :, 0] = points[:, :, 0] * cosVal - points[:, :, 1] * sinVal
+    newPoints[:, :, 1] = points[:, :, 0] * sinVal + points[:, :, 1] * cosVal
+    newPoints[:, :, 2] = points[:, :, 2]
+    return newPoints
+def rotate_y(points, a):
+    newPoints = np.zeros_like(points)
+    cosVal, sinVal = math.cos(a), math.sin(a)
+    newPoints[:, :, 0] = points[:, :, 0] * cosVal + points[:, :, 2] * sinVal
+    newPoints[:, :, 1] = points[:, :, 1]
+    newPoints[:, :, 2] = -points[:, :, 0] * sinVal + points[:, :, 2] * cosVal
+    return newPoints
+def rotate_x(points, a):
+    newPoints = np.zeros_like(points)
+    cosVal, sinVal = math.cos(a), math.sin(a)
+    newPoints[:, :, 0] =  points[:, :, 0]
+    newPoints[:, :, 1] = points[:, :, 1] * cosVal - points[:, :, 2] * sinVal
+    newPoints[:, :, 2] = points[:, :, 1] * sinVal + points[:, :, 2] * cosVal
+    return newPoints
+def renderPointsArr(points, cameraPos, cameraRotation, screenSize, fov=1.):
+    points -= np.array( ((cameraPos.xyz)) )
+    # rotate
+    # TODO: is the np.array mutable or not?
+    points = rotate_z(points, -cameraRotation.z)
+    points = rotate_y(points, -cameraRotation.y)
+    points = rotate_x(points, -cameraRotation.x)
+
+    points2D = points[:, :, 1:]
+    inFrontArr = points[:, :, :1] > 0 # TODO: maybe its not necesarry when we render ony those squares which are in front of the camera
+    temp = fov * points[:, :, 0]
+    temp = np.expand_dims(temp, 2)
+    points2D /= temp
+    screenSize /= 2
+    points2D *= np.array((((screenSize.x, -screenSize.y))))
+    points2D += np.array(((screenSize.xy)))
+
+    # remove points which are not in front of the camera
+    points2D = points2D * inFrontArr -1000 * (1 - inFrontArr)
+    return points2D
+
+def chopPointsIntoTris(points, screenSize):
+    tris = []
+    for x in range(0, points.shape[0] - 1):
+        for y in range(0, points.shape[1] - 1):
+            t1 = points[x, y, :], points[x+1, y, :], points[x+1, y+1, :]
+            t2 = points[x, y, :], points[x+1, y+1, :], points[x, y+1, :]
+            tris.append(Triangle2.fromArr(t1))
+            # print('t1:', Triangle2.fromArr(t1))
+            tris.append(Triangle2.fromArr(t2))
+    tris = list(filter(lambda t: t.shouldDraw(screenSize), tris))
+    return tris
+
 def main():
     # pygame
     screenSize = 700
@@ -140,9 +204,21 @@ def main():
         # rendering
         display.fill((2,204,254))
 
-        closePlane, farPlane = getCameraPlanes(cameraPos, cameraRotation, farPlaneDistance)
-        squares = getSquaresVisibleByCamera(closePlane, farPlane)
-        triangles = renderSquares(squares, cameraPos, cameraRotation, screenSize)
+        closePlane, farPlane = getCameraPlanes(cameraPos, cameraRotation, farPlaneDistance, fov)
+        
+        # new
+        minX, maxX = int(min(closePlane+farPlane, key=lambda p: p.x).x), int(max(closePlane+farPlane, key=lambda p: p.x).x) + 1
+        minY, maxY = int(min(closePlane+farPlane , key=lambda p: p.y).y), int(max(closePlane+farPlane, key=lambda p: p.y).y)
+
+        points = getPointsArr(minX, minY, maxX, maxY)
+        points = renderPointsArr(points, cameraPos, cameraRotation, Vector2((screenSize, screenSize)), fov)
+        triangles = chopPointsIntoTris(points, screenSize)
+        # print('count of triangles:', len(triangles))
+        
+        triangles = [[(int(p.x), int(p.y)) for p in t.points] for t in triangles]
+        # print('triangles:\n', triangles)
+        # squares = getSquaresVisibleByCamera(closePlane, farPlane)
+        # triangles = renderSquares(squares, cameraPos, cameraRotation, screenSize)
         drawTerrainCollored(triangles, display)
 
         pygame.display.update()
