@@ -10,7 +10,7 @@ triangle3 = tuple[point3, point3, point3]
 invalidPoint = Vector2(-1000)
 
 # render ------------------------------
-def renderPoint(p: point3, cameraPos: point3, cameraRotation: Vector3, screenSize: Vector2, fov: int = 1.):
+def renderPoint(p: point3, cameraPos: point3, cameraRotation: Vector3, screenSize: Vector2, fov: float = 1.):
     '''renders point onto screen, if it\'s behind screen returns invalid point'''
     p = p - cameraPos
     p.rotate_z_ip_rad(-cameraRotation.z)
@@ -18,7 +18,7 @@ def renderPoint(p: point3, cameraPos: point3, cameraRotation: Vector3, screenSiz
     p.rotate_x_ip_rad(-cameraRotation.x)    
     if p.x > 0:
         p /= fov * p.x
-        return Vector2(p.y * screenSize.x, -p.z * screenSize.y) + screenSize
+        return Vector2(p.y * screenSize.x, p.z * -screenSize.y) + screenSize
     return invalidPoint
 
 # draw ----------------------
@@ -51,9 +51,9 @@ class Triangle2:
         self.originalHeight = originalHeight
     def onScreen(self, screenSize) -> bool:
         p1, p2, p3 = self.points
-        b = (-10 <= p1.x < screenSize + 10) and (-10 <= p1.y < screenSize + 10)
-        b = b or (-10 <= p2.x < screenSize + 10) and (-10 <= p2.y < screenSize + 10)
-        b = b or (-10 <= p3.x < screenSize + 10) and (-10 <= p3.y < screenSize + 10)
+        b = (-10 <= p1.x < screenSize + 10 and -10 <= p1.y < screenSize + 10)
+        b = b or (-10 <= p2.x < screenSize + 10 and -10 <= p2.y < screenSize + 10)
+        b = b or (-10 <= p3.x < screenSize + 10 and -10 <= p3.y < screenSize + 10)
         return b
     def clockwise(self) -> bool:
         '''returns if the triangle has clockwise order of points (True) or anticlockwise (False)'''

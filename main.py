@@ -26,6 +26,7 @@ def getSquareTriangles(x, y):
     p4 = getPointAtCoord(x, y+1)
     return (p1, p2, p3), (p1, p3, p4)
 
+# TODO: the fov here tells the distance of the close plane but somewhere ele it tells the field of view
 def getCameraPlanes(cameraPos: point3, cameraRotation: Vector3, farPlaneDistance: float, fov=1.):
     screenRect3d = [Vector3(fov, -1, 1), Vector3(fov, 1, 1), Vector3(fov, 1, -1), Vector3(fov, -1, -1)]
     closePlanePoints = [rotatePoint(p, cameraRotation) for p in screenRect3d]
@@ -128,14 +129,15 @@ def main():
     fogSurface.set_alpha(15)
 
     # camera
-    cameraPos = Vector3(0.1, 0, getPointAtCoord(0, 0).z + 1)
-    cameraRotation = Vector3(0, 0, 0.01)
-    cameraSpeed = Vector3(0., 0., -1.)
+    cameraPos = Vector3(0.1, 0, getPointAtCoord(0, 0).z)
+    cameraRotation = Vector3(0, 0, 0)
+    cameraSpeed = Vector3(0., 0., 0.)
     space = False
     airTime = True
 
     # rendering
     farPlaneDistance = 20
+    fov = 1. # TODO: does the fov increase or decrease the size of the view?
 
     # controls per second
     cameraMovementSpeed = 5.
@@ -157,6 +159,7 @@ def main():
             elif event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_SPACE:
                     space = True
+                # debug
                 elif event.key == pygame.K_p:
                     print(f'cameraPos {cameraPos}\ncameraRotation {cameraRotation}\ncameraPlanes\n{getCameraPlanes(cameraPos, cameraRotation, farPlaneDistance)}')
         
@@ -211,6 +214,11 @@ def main():
         points = renderPointsArr(points, cameraPos, cameraRotation, Vector2((screenSize, screenSize)), fov)
         triangles = chopPointsIntoTris(points, screenSize)
         # print('count of triangles:', len(triangles))
+        # TODO: readd colors
+        # TODO: fix camera rot and pos
+        # TODO: sort the triangles by distance from camera
+        # TODO: change fov into closePlaneDistance
+        # TODO: somehow prevent rendering triangles which are too big
         
         triangles = [[(int(p.x), int(p.y)) for p in t.points] for t in triangles]
         # print('triangles:\n', triangles)
