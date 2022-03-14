@@ -26,13 +26,10 @@ def getSquareTriangles(x, y):
     p4 = getPointAtCoord(x, y+1)
     return (p1, p2, p3), (p1, p3, p4)
 
-def getCameraPlanes(cameraPos: point3, cameraRotation: Vector3, farPlaneDistance: float):
-    fov = 1.
+def getCameraPlanes(cameraPos: point3, cameraRotation: Vector3, farPlaneDistance: float, fov=1.):
     screenRect3d = [Vector3(fov, -1, 1), Vector3(fov, 1, 1), Vector3(fov, 1, -1), Vector3(fov, -1, -1)]
     closePlanePoints = [rotatePoint(p, cameraRotation) for p in screenRect3d]
-    farPlanePoints  = deepcopy(closePlanePoints)
-    [p.scale_to_length(farPlaneDistance) for p in farPlanePoints]
-    farPlanePoints = [p + cameraPos for p in farPlanePoints]
+    farPlanePoints  = [p * (farPlaneDistance / fov) + cameraPos for p in closePlanePoints]
     closePlanePoints = [p + cameraPos for p in closePlanePoints]
     return closePlanePoints, farPlanePoints
 
