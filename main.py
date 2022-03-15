@@ -90,19 +90,20 @@ def renderPointsArr(points, cameraPos, cameraRotation, screenSize, closePlaneDis
     points -= np.array( ((cameraPos.xyz)) )
     # rotate
     # TODO: is the np.array mutable or not?
+    # TODO: merge the rotations into single function
     points = rotate_z(points, -cameraRotation.z)
     points = rotate_y(points, -cameraRotation.y)
     points = rotate_x(points, -cameraRotation.x)
 
     points2D = points[:, :, 1:]
-    inFrontArr = points[:, :, :1] > 0
-    points2D *= closePlaneDistance / points[:, :, :1]
+    behindCamArr = points[:, :, :1] <= 0
+    points2D *= closePlaneDistance / (points[:, :, :1] - behindCamArr)
     screenSize /= 2
     points2D *= np.array((((screenSize.x, -screenSize.y))))
     points2D += np.array(((screenSize.xy)))
 
     # remove points which are not in front of the camera
-    points2D = points2D * inFrontArr -1000 * (1 - inFrontArr)
+    points2D = points2D * (1. - behindCamArr) -1000 * behindCamArr
     return points2D
 
 def chopPointsIntoTris(points, screenSize):
