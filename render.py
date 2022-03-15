@@ -28,7 +28,10 @@ def drawTriangles(triangles: list[triangle3], display, color=(0, 160, 30)):
     for t in triangles:
         draw.polygon(display, color, t)
         # draw.polygon(display, boundaryColor, t, 3)
-
+def generateColor(height):
+    v = 90 + int(height * 20)
+    v = min(max(v, 0), 255)
+    return (0, v, 30)
 def drawTerrainCollored(triangles: np.ndarray, savedPoints: np.ndarray, display, boundaryColor=(0, 0, 0), screenSize=700):
     triangles = triangles.reshape(triangles.shape[0] * triangles.shape[1] * 2, 3, 2)
     triangles = [[(int(p[0]), int(p[1])) for p in t] for t in triangles.tolist()]
@@ -36,13 +39,11 @@ def drawTerrainCollored(triangles: np.ndarray, savedPoints: np.ndarray, display,
     heights = np.repeat( heights.reshape(heights.shape[0] * heights.shape[1]), 2)
     triangles = [Triangle2.fromArr(a) for a in triangles]
     for i, t in enumerate(triangles):
-        t.originalHeight = heights[i]
+        t.color = generateColor(heights[i])
     triangles = list(filter(lambda t: t.shouldDraw(screenSize), triangles))
     for t in triangles:
-        color = (0, 100 + int(t.originalHeight * 15), 30)
-        t = t.toArr()
-        draw.polygon(display, color, t)
-        draw.polygon(display, boundaryColor, t, 1)
+        draw.polygon(display, t.color, t.toArr())
+        draw.polygon(display, boundaryColor, t.toArr(), 1)
 
 # classes ----------------------
 class Triangle2:
@@ -52,9 +53,8 @@ class Triangle2:
     def toArr(self):
         return [(int(p.x), int(p.y)) for p in self.points]
 
-    def __init__(self, p1: Vector2, p2: Vector2, p3: Vector2, originalHeight=None) -> None:
+    def __init__(self, p1: Vector2, p2: Vector2, p3: Vector2) -> None:
         self.points = [p1, p2, p3]
-        self.originalHeight = originalHeight
     def onScreen(self, screenSize) -> bool:
         p1, p2, p3 = self.points
         b = (-10 <= p1.x < screenSize + 10 and -10 <= p1.y < screenSize + 10)
