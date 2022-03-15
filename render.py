@@ -32,16 +32,12 @@ def generateColor(height):
     v = 90 + int(height * 20)
     v = min(max(v, 0), 255)
     return (0, v, 30)
-def drawTerrainCollored(triangles: np.ndarray, heights: np.ndarray, display, boundaryColor=(0, 0, 0), screenSize=700):
-    triangles = [[(int(p[0]), int(p[1])) for p in t] for t in triangles.tolist()]
-    heights = np.repeat( heights.reshape(heights.shape[0] * heights.shape[1]), 2)
-    triangles = [Triangle2.fromArr(a) for a in triangles]
-    for i, t in enumerate(triangles):
-        t.color = generateColor(heights[i])
-    triangles = list(filter(lambda t: t.shouldDraw(screenSize), triangles))
-    for t in triangles:
-        draw.polygon(display, t.color, t.toArr())
-        draw.polygon(display, boundaryColor, t.toArr(), 1)
+def drawTerrainCollored(triangles: np.ndarray, display, boundaryColor=(0, 0, 0), screenSize=700):
+    for i in range(triangles.shape[0]):
+        points = triangles[i]['points'].tolist()
+        color = triangles[i]['color'].tolist()
+        draw.polygon(display, color, points)
+        draw.polygon(display, boundaryColor, points, 1)
 
 # classes ----------------------
 class Triangle2:
