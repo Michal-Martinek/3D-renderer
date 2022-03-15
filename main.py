@@ -58,11 +58,11 @@ def renderSquares(squares: list[square], cameraPos: point3, cameraRotation: Vect
 
 # TODO: this func should use native numpy ops instead of a for-loop
 def getPointsArr(minX, minY, maxX, maxY):
-    # [x, y, (x, y, z)] - 3D
-    points = np.ndarray((maxX-minX, maxY-minY, 3))
-    for x in range(maxX-minX):
-        for y in range(maxY-minY):
-            points[x, y, :] = getPointAtCoord(x+minX, y+minY).xyz
+    # [y, x, (x, y, z)] - 3D
+    points = np.ndarray(( maxY-minY, maxX-minX, 3))
+    for y in range(maxY-minY):
+        for x in range(maxX-minX):
+            points[y, x, :] = getPointAtCoord(x+minX, y+minY).xyz
     return points
 
 def rotate_z(points, a):
@@ -106,14 +106,13 @@ def renderPointsArr(points, cameraPos, cameraRotation, screenSize, closePlaneDis
     return points2D
 
 def chopPointsIntoTris(points, screenSize):
-    tris = []
-    for x in range(0, points.shape[0] - 1):
-        for y in range(0, points.shape[1] - 1):
-            t1 = points[x, y, :], points[x+1, y, :], points[x+1, y+1, :]
-            t2 = points[x, y, :], points[x+1, y+1, :], points[x, y+1, :]
-            tris.append(Triangle2.fromArr(t1))
-            tris.append(Triangle2.fromArr(t2))
-    tris = list(filter(lambda t: t.shouldDraw(screenSize), tris))
+    tris = np.ndarray((points.shape[0]-1, points.shape[1]-1, 2, 3, 2))
+    x = np.repeat(points[:-1, :-1, :], 2, axis=1)
+    tris[:, :, :, 0, :] = x.reshape((x.shape[0], x.shape[1]//2, 2, 2))
+    tris[:, :, 0, 1, :] = points[:-1, 1:, :]
+    tris[:, :, 0, 2, :] = points[1:,  1:, :]
+    tris[:, :, 1, 1, :] = points[1:,  1:, :]
+    tris[:, :, 1, 2, :] = points[1:, :-1, :]
     return tris
 
 def main():
@@ -159,9 +158,6 @@ def main():
             elif event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_SPACE:
                     space = True
-                # debug
-                elif event.key == pygame.K_p:
-                    print(f'cameraPos {cameraPos}\ncameraRotation {cameraRotation}\ncameraPlanes\n{getCameraPlanes(cameraPos, cameraRotation, farPlaneDistance)}')
         
         # controls
         speedScalingFactor = cameraMovementSpeed * numSecsPassed
@@ -219,8 +215,6 @@ def main():
         # TODO: somehow prevent rendering triangles which are too big
         # TODO: don't render triangles which are fully behind another ones
         # TODO: use numpy for generating triangle from points
-        
-        triangles = [[(int(p.x), int(p.y)) for p in t.points] for t in triangles]
         drawTerrainCollored(triangles, display)
 
         pygame.display.update()

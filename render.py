@@ -1,5 +1,6 @@
 from pygame.math import Vector3, Vector2
 from pygame import draw
+import numpy as np
 
 point2 = Vector2
 point3 = Vector3
@@ -28,24 +29,25 @@ def drawTriangles(triangles: list[triangle3], display, color=(0, 160, 30)):
         draw.polygon(display, color, t)
         # draw.polygon(display, boundaryColor, t, 3)
 
-def drawTerrainCollored(triangles, display, boundaryColor=(0, 0, 0)):
+def drawTerrainCollored(triangles: np.ndarray, display, boundaryColor=(0, 0, 0), screenSize=700):
+    triangles = triangles.reshape(triangles.shape[0] * triangles.shape[1] * 2, 3, 2)
+    triangles = [[(int(p[0]), int(p[1])) for p in t] for t in triangles.tolist()]
+    
+    triangles = [Triangle2.fromArr(a) for a in triangles]
+    triangles = list(filter(lambda t: t.shouldDraw(screenSize), triangles))
     for t in triangles:
-        # color = (0, 100 + int(t.originalHeight * 15), 30) # TODO: store the original height of the points somewhere
-        color = (0, 180, 30)
-        try:
-            draw.polygon(display, color, t)
-            draw.polygon(display, boundaryColor, t, 1)
-        except ValueError as e: # TODO: this should be handled properly or even removed
-            print(color)
-            raise e
-
-
+        t = t.toArr()
+        # TODO: store the original height of the points somewhere to get the color of the triangle
+        draw.polygon(display, (0, 180, 30), t)
+        draw.polygon(display, boundaryColor, t, 1)
 
 # classes ----------------------
 class Triangle2:
     @ staticmethod
     def fromArr(a):
         return Triangle2(Vector2(*a[0]), Vector2(*a[1]), Vector2(*a[2]))
+    def toArr(self):
+        return [(int(p.x), int(p.y)) for p in self.points]
 
     def __init__(self, p1: Vector2, p2: Vector2, p3: Vector2, originalHeight=None) -> None:
         self.points = [p1, p2, p3]
