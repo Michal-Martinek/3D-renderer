@@ -106,7 +106,7 @@ def renderPointsArr(points, cameraPos, cameraRotation, screenSize, closePlaneDis
     points2D = points2D * (1. - behindCamArr) -1000 * behindCamArr
     return points2D
 
-def chopPointsIntoTris(points, screenSize):
+def chopPointsIntoTris(points):
     tris = np.ndarray((points.shape[0]-1, points.shape[1]-1, 2, 3, 2))
     x = np.repeat(points[:-1, :-1, :], 2, axis=1)
     tris[:, :, :, 0, :] = x.reshape((x.shape[0], x.shape[1]//2, 2, 2))
@@ -208,15 +208,13 @@ def main():
         minY, maxY = int(min(closePlane+farPlane , key=lambda p: p.y).y), int(max(closePlane+farPlane, key=lambda p: p.y).y)
 
         points = getPointsArr(minX, minY, maxX, maxY)
+        savedPoints = points.copy()
         points = renderPointsArr(points, cameraPos, cameraRotation, Vector2((screenSize, screenSize)), closePlaneDistance)
-        triangles = chopPointsIntoTris(points, screenSize)
-        # TODO: readd colors
-            # we would need an array of additional info - original distance from cam, original height
+        triangles = chopPointsIntoTris(points)
         # TODO: sort the triangles by distance from camera
         # TODO: somehow prevent rendering triangles which are too big
         # TODO: don't render triangles which are fully behind another ones
-        # TODO: use numpy for generating triangle from points
-        drawTerrainCollored(triangles, display)
+        drawTerrainCollored(triangles, savedPoints, display)
 
         pygame.display.update()
         frameClock.tick(30)
