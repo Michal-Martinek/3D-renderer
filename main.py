@@ -94,7 +94,7 @@ def renderPointsArr(points, cameraPos, cameraRotation, screenSize, closePlaneDis
     points = rotate_z(points, -cameraRotation.z)
     points = rotate_y(points, -cameraRotation.y)
     points = rotate_x(points, -cameraRotation.x)
-
+    distances = points [:-1, :-1, 0]
     points2D = points[:, :, 1:]
     behindCamArr = points[:, :, :1] <= 0
     points2D *= closePlaneDistance / (points[:, :, :1] - behindCamArr)
@@ -104,7 +104,7 @@ def renderPointsArr(points, cameraPos, cameraRotation, screenSize, closePlaneDis
 
     # remove points which are not in front of the camera
     points2D = points2D * (1. - behindCamArr) -1000 * behindCamArr
-    return points2D
+    return points2D, distances
 
 def chopPointsIntoTris(points):
     tris = np.ndarray((points.shape[0]-1, points.shape[1]-1, 2, 3, 2))
@@ -114,7 +114,7 @@ def chopPointsIntoTris(points):
     tris[:, :, 0, 2, :] = points[1:,  1:, :]
     tris[:, :, 1, 1, :] = points[1:,  1:, :]
     tris[:, :, 1, 2, :] = points[1:, :-1, :]
-    return tris
+    return tris.reshape(tris.shape[0] * tris.shape[1] * 2, 3, 2)
 
 def main():
     # pygame
@@ -203,18 +203,27 @@ def main():
 
         closePlane, farPlane = getCameraPlanes(cameraPos, cameraRotation, farPlaneDistance, closePlaneDistance)
         
-        # new
         minX, maxX = int(min(closePlane+farPlane, key=lambda p: p.x).x), int(max(closePlane+farPlane, key=lambda p: p.x).x) + 1
         minY, maxY = int(min(closePlane+farPlane , key=lambda p: p.y).y), int(max(closePlane+farPlane, key=lambda p: p.y).y)
 
         points = getPointsArr(minX, minY, maxX, maxY)
-        savedPoints = points.copy()
-        points = renderPointsArr(points, cameraPos, cameraRotation, Vector2((screenSize, screenSize)), closePlaneDistance)
+        heights = points[:-1, :-1, 2].copy()
+        flattenedHeights = np.repeat( heights.reshape(heights.shape[0] * heights.shape[1]), 2)
+        # TODO: make the triangles a structured array with height for color / whole color and distance from camera for sorting
+        points, distances = renderPointsArr(points, cameraPos, cameraRotation, Vector2((screenSize, screenSize)), closePlaneDistance)
         triangles = chopPointsIntoTris(points)
+        
+        structTris = np.ndarray(triangles.shape[0], dtype=[('color', 'u4', 3), ('points', 'f8', (3, 2)), ('camDistance', 'f8')])
+        structTris['points'] = triangles
+        structTris['camDistance'] = np.repeat(distances.flat, 2)
+        structTris['color'] = (0, 90, 30)
+        structTris['color'][:, 1] += flattenedHeights.astype('u4') * 20
+        structTris['color'][:, 1] = np.clip(structTris['color'][:, 1], 0, 255)
+
         # TODO: sort the triangles by distance from camera
         # TODO: somehow prevent rendering triangles which are too big
         # TODO: don't render triangles which are fully behind another ones
-        drawTerrainCollored(triangles, savedPoints, display)
+        drawTerrainCollored(triangles, heights, display)
 
         pygame.display.update()
         frameClock.tick(30)
