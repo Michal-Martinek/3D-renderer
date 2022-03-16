@@ -1,8 +1,7 @@
 import pygame
 from pygame.math import Vector3, Vector2
-import noise
+from vnoise import vnoise
 import math
-import functools
 import time
 import numpy as np
 from copy import deepcopy
@@ -10,22 +9,8 @@ from copy import deepcopy
 from render import drawTerrainCollored, Triangle2, render, square, point3
 
 # TODO: remove unused functions
-@ functools.lru_cache(1000)
-def getPointAtCoord(x: int, y: int, tileSize=8):
-    val = noise.pnoise2(x / tileSize, y / tileSize, octaves=2)
-    # normalize then scale
-    val = (val + 0.75) / 1.5
-    val *= 8.
-    return pygame.math.Vector3(x, y, val)
 def rotatePoint(p: Vector3, rot: Vector3):
     return p.rotate_z_rad(rot.z).rotate_y_rad(rot.y).rotate_x_rad(rot.x)
-
-def getSquareTriangles(x, y):
-    p1 = getPointAtCoord(x, y)
-    p2 = getPointAtCoord(x+1, y)
-    p3 = getPointAtCoord(x+1, y+1)
-    p4 = getPointAtCoord(x, y+1)
-    return (p1, p2, p3), (p1, p3, p4)
 
 def getCameraPlanes(cameraPos: point3, cameraRotation: Vector3, farPlaneDistance: float, closePlaneDistance: float):
     screenRect3d = [Vector3(closePlaneDistance, -1, 1), Vector3(closePlaneDistance, 1, 1), Vector3(closePlaneDistance, 1, -1), Vector3(closePlaneDistance, -1, -1)]
@@ -34,35 +19,16 @@ def getCameraPlanes(cameraPos: point3, cameraRotation: Vector3, farPlaneDistance
     closePlanePoints = [p + cameraPos for p in closePlanePoints]
     return closePlanePoints, farPlanePoints
 
-def getSquaresVisibleByCamera(closePlane: square, farPlane: square):
-    minX, maxX = min(closePlane+farPlane, key=lambda p: p.x), max(closePlane+farPlane, key=lambda p: p.x)
-    minY, maxY = min(closePlane+farPlane , key=lambda p: p.y), max(closePlane+farPlane, key=lambda p: p.y)
-
-    squares = []
-    for x in range(int(minX.x - 1), int(maxX.x + 1)):
-            squares.extend( [(x, y) for y in range(int(minY.y - 1), int(maxY.y + 1))] )
-    return squares
-def renderSquares(squares: list[square], cameraPos: point3, cameraRotation: Vector3, screenSize: float):
-    squares.sort(key=lambda s: (cameraPos.x - s[0])**2 + (cameraPos.y - s[1])**2, reverse=True)
-    triangles = []
-    for s in squares:
-        triangles.extend(getSquareTriangles(*s))
-
-    triangles2 = []
-    for t in triangles:
-        triangles2.append(render(t, cameraPos, cameraRotation, Vector2(screenSize//2)))
-    triangles = list(filter(lambda t: t.shouldDraw(screenSize), triangles2))
-    return triangles
-
 # TODO: move these functions to render.py
-
-# TODO: this func should use native numpy ops instead of a for-loop
-def getPointsArr(minX, minY, maxX, maxY):
+def getPointsArr(minX, minY, maxX, maxY, tilesize=8.40, scale=8):
     # [y, x, (x, y, z)] - 3D
     points = np.ndarray(( maxY-minY, maxX-minX, 3))
-    for y in range(maxY-minY):
-        for x in range(maxX-minX):
-            points[y, x, :] = getPointAtCoord(x+minX, y+minY).xyz
+    points[:, :, 0] = np.reshape( np.tile( np.arange(minX, maxX), maxY-minY), points.shape[:2])
+    points[:, :, 1] = np.reshape( np.repeat( np.arange(minY, maxY), maxX-minX), points.shape[:2])
+    heights = vnoise.Noise().noise2(np.arange(minY, maxY)/tilesize, np.arange(minX, maxX)/tilesize)
+    heights += 0.75
+    heights *= scale / 1.5
+    points[:, :, 2] = heights
     return points
 
 def rotate_z(points, a):
@@ -98,7 +64,7 @@ def renderPointsArr(points, cameraPos, cameraRotation, screenSize, closePlaneDis
     points2D = points[:, :, 1:]
     behindCamArr = points[:, :, :1] <= 0
     points2D *= closePlaneDistance / (points[:, :, :1] - behindCamArr)
-    screenSize /= 2
+    screenSize = screenSize / 2
     points2D *= np.array((((screenSize.x, -screenSize.y))))
     points2D += np.array(((screenSize.xy)))
 
@@ -115,7 +81,9 @@ def chopPointsIntoTris(points):
     tris[:, :, 1, 1, :] = points[1:,  1:, :]
     tris[:, :, 1, 2, :] = points[1:, :-1, :]
     return tris.reshape(tris.shape[0] * tris.shape[1] * 2, 3, 2)
-
+def getSurfaceHeight(cameraPos):
+    adjacentSquares = getPointsArr(int(cameraPos.x), int(cameraPos.y), int(cameraPos.x)+2, int(cameraPos.y)+2)
+    return np.max( adjacentSquares[:, :, 2] ) + 1.5
 def main():
     # pygame
     screenSize = 700
@@ -129,7 +97,8 @@ def main():
     fogSurface.set_alpha(15)
 
     # camera
-    cameraPos = Vector3(0, 0, getPointAtCoord(0, 0).z)
+    cameraPos = Vector3(0, 0, 0)
+    cameraPos.z = getSurfaceHeight(cameraPos)
     cameraRotation = Vector3(0, 0, 0)
     cameraSpeed = Vector3(0., 0., 0.)
     space = False
@@ -185,8 +154,7 @@ def main():
                 airTime = True
 
         # camera movement
-        t1, t2 = getSquareTriangles(int(cameraPos.x), int(cameraPos.y))
-        surfaceHeight = max((*t1, *t2), key=lambda p: p.z).z + 1.5
+        surfaceHeight = getSurfaceHeight(cameraPos)
         cameraPos += numSecsPassed * (cameraSpeed + gravity * numSecsPassed/2)
         cameraSpeed += gravity * numSecsPassed
 
@@ -202,9 +170,8 @@ def main():
         display.fill((2,204,254))
 
         closePlane, farPlane = getCameraPlanes(cameraPos, cameraRotation, farPlaneDistance, closePlaneDistance)
-        
-        minX, maxX = int(min(closePlane+farPlane, key=lambda p: p.x).x), int(max(closePlane+farPlane, key=lambda p: p.x).x) + 1
-        minY, maxY = int(min(closePlane+farPlane , key=lambda p: p.y).y), int(max(closePlane+farPlane, key=lambda p: p.y).y)
+        minX, maxX = int(min(closePlane+farPlane, key=lambda p: p.x).x) - 1, int(max(closePlane+farPlane, key=lambda p: p.x).x) + 1
+        minY, maxY = int(min(closePlane+farPlane, key=lambda p: p.y).y) - 1, int(max(closePlane+farPlane, key=lambda p: p.y).y) + 1
 
         points = getPointsArr(minX, minY, maxX, maxY)
         heights = points[:-1, :-1, 2].copy()
