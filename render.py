@@ -37,7 +37,7 @@ def drawTerrainCollored(triangles: np.ndarray, display, boundaryColor=(0, 0, 0),
         points = triangles[i]['points'].tolist()
         color = triangles[i]['color'].tolist()
         draw.polygon(display, color, points)
-        draw.polygon(display, boundaryColor, points, 1)
+        # draw.polygon(display, boundaryColor, points, 1)
 
 # classes ----------------------
 class Triangle2:

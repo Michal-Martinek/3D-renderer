@@ -217,10 +217,9 @@ def main():
         structTris['points'] = triangles
         structTris['camDistance'] = np.repeat(distances.flat, 2)
         structTris['color'] = (0, 90, 30)
-        structTris['color'][:, 1] += flattenedHeights.astype('u4') * 20
-        structTris['color'][:, 1] = np.clip(structTris['color'][:, 1], 0, 255)
+        structTris['color'][:, 1] += (flattenedHeights * 20).astype('u4')
+        structTris['color'][:, :] = np.clip(structTris['color'][:, :], 0, 255)
 
-        # TODO: remove tris outside of the screen
         onScreen = structTris['points'].copy() # (a > 1) & (a < 5)
         onScreen = (-10 < onScreen) & (onScreen < screenSize + 10)
         onScreen = np.any( np.all(onScreen, axis=2), axis=1)
@@ -228,7 +227,6 @@ def main():
 
         structTris[::-1].sort(order='camDistance')
         
-        # TODO: sort the triangles by distance from camera
         # TODO: somehow prevent rendering triangles which are too big
         # TODO: don't render triangles which are fully behind another ones
         drawTerrainCollored(structTris, display)
