@@ -84,6 +84,50 @@ def chopPointsIntoTris(points):
 def getSurfaceHeight(cameraPos):
     adjacentSquares = getPointsArr(int(cameraPos.x), int(cameraPos.y), int(cameraPos.x)+2, int(cameraPos.y)+2)
     return np.max( adjacentSquares[:, :, 2] ) + 1.5
+
+def indep_roll(arr, shifts):
+    if arr.shape[0] == 0:
+        return arr
+    return np.array([np.roll(row, x, axis=0) for row,x in zip(arr, shifts)])
+
+def clipTriangles(tris, screenSize):
+    # count points inside the screen
+    countInside = np.count_nonzero(tris['points'][:, :, 1] <= screenSize, axis=1)
+
+    # moving the point so that the good points is up front
+    oneIn = tris[countInside == 1]['points']
+    correctPointIdx = np.nonzero(oneIn[:, :, 1] <= screenSize) [1]
+    oneIn = indep_roll(oneIn, -correctPointIdx)
+
+    # clipping the oneTri
+    inPoint = oneIn[:, :1]
+    wrongVectors = oneIn[:, 1:] - inPoint
+    wrongVectors *= (screenSize - inPoint[:, :, 1:]) / (wrongVectors[:, :, 1:])
+
+    wrongVectors += inPoint
+    oneStructs = tris[countInside == 1].copy()
+    oneStructs['points'] = np.concatenate((inPoint, wrongVectors), axis=1)
+
+    # two
+    twoIn = tris[countInside == 2]['points']
+    correctPointIdx = np.nonzero(twoIn[:, :, 1] > screenSize) [1]
+    x = twoIn.copy()
+    twoIn = indep_roll(twoIn, -correctPointIdx)
+
+    goodPoints = twoIn[:, 1:]
+    vectors = twoIn[:, :1] - goodPoints
+    vectors *= (screenSize - goodPoints[:, :, 1:]) / vectors[:, :, 1:]
+    vectors += goodPoints
+
+    twoStructs1 = (tris[countInside == 2]).copy()
+    twoStructs2 = twoStructs1.copy()
+    twoStructs1['points'] = np.concatenate( (twoIn[:, 1:], vectors[:, 1:]), axis=1)
+    twoStructs2['points'] = np.concatenate((twoIn[:, 1:2], vectors[:, ::-1]), axis=1)
+
+    out = np.concatenate((tris[countInside == 3], oneStructs, twoStructs1, twoStructs2), axis=0)
+    return out
+        
+
 def main():
     # pygame
     screenSize = 700
@@ -128,8 +172,10 @@ def main():
             elif event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_SPACE:
                     space = True
-        
+                if event.key == pygame.K_p:
+                    print('camera pos:', cameraPos, '\ncamera rot:', cameraRotation)
         # controls
+        # TODO: capture also short key presses with pygame.KEYDOWN event
         speedScalingFactor = cameraMovementSpeed * numSecsPassed
         moveVectorForward = Vector2(math.cos(cameraRotation.z), math.sin(cameraRotation.z)) * speedScalingFactor
         moveVectorSideways = Vector2(-math.sin(cameraRotation.z), math.cos(cameraRotation.z)) * speedScalingFactor
@@ -157,7 +203,7 @@ def main():
         surfaceHeight = getSurfaceHeight(cameraPos)
         cameraPos += numSecsPassed * (cameraSpeed + gravity * numSecsPassed/2)
         cameraSpeed += gravity * numSecsPassed
-
+        # TODO: prevent the screen from shaking too much
         if not airTime and cameraPos.z <= surfaceHeight + .5:
             cameraPos.z = surfaceHeight
             cameraSpeed += gravity * 6
@@ -175,8 +221,7 @@ def main():
 
         points = getPointsArr(minX, minY, maxX, maxY)
         heights = points[:-1, :-1, 2].copy()
-        flattenedHeights = np.repeat( heights.reshape(heights.shape[0] * heights.shape[1]), 2)
-        # TODO: make the triangles a structured array with height for color / whole color and distance from camera for sorting
+        flattenedHeights = np.repeat( heights.reshape(heights.shape[0] * heights.shape[1]), 2) # what ?!
         points, distances = renderPointsArr(points, cameraPos, cameraRotation, Vector2((screenSize, screenSize)), closePlaneDistance)
         triangles = chopPointsIntoTris(points)
         
@@ -185,18 +230,19 @@ def main():
         structTris['camDistance'] = np.repeat(distances.flat, 2)
         structTris['color'] = (0, 90, 30)
         structTris['color'][:, 1] += (flattenedHeights * 20).astype('u4')
-        structTris['color'][:, :] = np.clip(structTris['color'][:, :], 0, 255)
+        structTris['color'] = np.clip(structTris['color'], 0, 255)
 
-        onScreen = structTris['points'].copy() # (a > 1) & (a < 5)
-        onScreen = (-10 < onScreen) & (onScreen < screenSize + 10)
-        onScreen = np.any( np.all(onScreen, axis=2), axis=1)
-        structTris = structTris[onScreen]
+        # TODO: move this higher up in the pipeline
+        # filter triangles with any point = (-1000, -1000) because this indicates a point behind the cam
+        truthTable = np.any(np.all(structTris['points'] == -1000, axis=2), axis=1)
+        structTris = structTris[np.logical_not(truthTable)]
 
-        structTris[::-1].sort(order='camDistance')
+        clippedTris = clipTriangles(structTris, screenSize)
+        clippedTris[::-1].sort(order='camDistance')
         
         # TODO: somehow prevent rendering triangles which are too big
         # TODO: don't render triangles which are fully behind another ones
-        drawTerrainCollored(structTris, display)
+        drawTerrainCollored(clippedTris, display)
 
         pygame.display.update()
         frameClock.tick(30)
