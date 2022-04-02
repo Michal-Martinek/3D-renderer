@@ -90,33 +90,49 @@ def indep_roll(arr, shifts):
         return arr
     return np.array([np.roll(row, x, axis=0) for row,x in zip(arr, shifts)])
 
-def clipTriangles(tris, screenSize):
+def clipTriangles1Boundary(tris, boundary, axis, boundaryTop=True):
     # count points inside the screen
-    countInside = np.count_nonzero(tris['points'][:, :, 1] <= screenSize, axis=1)
+    if boundaryTop:
+        countInside = np.count_nonzero(tris['points'][:, :, axis] < boundary, axis=1)
+    else:
+        countInside = np.count_nonzero(tris['points'][:, :, axis] > boundary, axis=1)
 
     # moving the point so that the good points is up front
     oneIn = tris[countInside == 1]['points']
-    correctPointIdx = np.nonzero(oneIn[:, :, 1] <= screenSize) [1]
+    if boundaryTop:
+        inPoints = oneIn[:, :, axis] < boundary
+    else:
+        inPoints = oneIn[:, :, axis] > boundary
+    correctPointIdx = np.nonzero(inPoints) [1]
     oneIn = indep_roll(oneIn, -correctPointIdx)
 
     # clipping the oneTri
     inPoint = oneIn[:, :1]
-    wrongVectors = oneIn[:, 1:] - inPoint
-    wrongVectors *= (screenSize - inPoint[:, :, 1:]) / (wrongVectors[:, :, 1:])
+    vectors = oneIn[:, 1:] - inPoint
+    if boundaryTop:
+        vectors *= (boundary - inPoint[:, :, axis:axis+1]) / (vectors[:, :, axis:axis+1])
+    else:
+        vectors *= (-inPoint[:, :, axis:axis+1]) / (vectors[:, :, axis:axis+1])
 
-    wrongVectors += inPoint
+    vectors += inPoint
     oneStructs = tris[countInside == 1].copy()
-    oneStructs['points'] = np.concatenate((inPoint, wrongVectors), axis=1)
+    oneStructs['points'] = np.concatenate((inPoint, vectors), axis=1)
 
     # two
     twoIn = tris[countInside == 2]['points']
-    correctPointIdx = np.nonzero(twoIn[:, :, 1] > screenSize) [1]
-    x = twoIn.copy()
+    if boundaryTop:
+        outPoints = twoIn[:, :, axis] >= boundary
+    else:
+        outPoints = twoIn[:, :, axis] <= boundary
+    correctPointIdx = np.nonzero(outPoints) [1]
     twoIn = indep_roll(twoIn, -correctPointIdx)
 
     goodPoints = twoIn[:, 1:]
     vectors = twoIn[:, :1] - goodPoints
-    vectors *= (screenSize - goodPoints[:, :, 1:]) / vectors[:, :, 1:]
+    if boundaryTop:
+        vectors *= (boundary - goodPoints[:, :, axis:axis+1]) / vectors[:, :, axis:axis+1]
+    else:
+        vectors *= (-goodPoints[:, :, axis:axis+1]) / vectors[:, :, axis:axis+1]
     vectors += goodPoints
 
     twoStructs1 = (tris[countInside == 2]).copy()
@@ -127,6 +143,12 @@ def clipTriangles(tris, screenSize):
     out = np.concatenate((tris[countInside == 3], oneStructs, twoStructs1, twoStructs2), axis=0)
     return out
         
+def clipTriangles(tris, screenSize):
+    tris = clipTriangles1Boundary(tris, screenSize, 1, True)
+    tris = clipTriangles1Boundary(tris, screenSize, 0, True)
+    tris = clipTriangles1Boundary(tris, 0, 1, False)
+    tris = clipTriangles1Boundary(tris, 0, 0, False)
+    return tris 
 
 def main():
     # pygame
@@ -236,7 +258,6 @@ def main():
         # filter triangles with any point = (-1000, -1000) because this indicates a point behind the cam
         truthTable = np.any(np.all(structTris['points'] == -1000, axis=2), axis=1)
         structTris = structTris[np.logical_not(truthTable)]
-
         clippedTris = clipTriangles(structTris, screenSize)
         clippedTris[::-1].sort(order='camDistance')
         
