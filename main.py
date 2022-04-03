@@ -160,7 +160,8 @@ def main():
     # pygame
     screenSize = 700
     display = pygame.display.set_mode((screenSize, screenSize), pygame.DOUBLEBUF)
-    pygame.event.set_allowed([pygame.QUIT, pygame.KEYDOWN])
+    pygame.event.set_blocked(None)
+    pygame.event.set_allowed([pygame.QUIT, pygame.KEYDOWN, pygame.KEYUP])
     frameClock = pygame.time.Clock()
 
     # TODO: use the fogSurface
@@ -173,7 +174,6 @@ def main():
     cameraPos.z = getSurfaceHeight(cameraPos)
     cameraRotation = Vector3(0, 0, 0)
     cameraSpeed = Vector3(0., 0., 0.)
-    space = False
     airTime = True
 
     # rendering
@@ -185,6 +185,8 @@ def main():
     cameraRotationSpeed = 3. # radians
     cameraJumpStartVelocity = 2.5
     gravity = Vector3(0, 0, -2.)
+
+    keysDown = {x: False for x in [pygame.K_w, pygame.K_s, pygame.K_a, pygame.K_d, pygame.K_q, pygame.K_e, pygame.K_SPACE]}
     
     # inner vars
     startFrameTime = time.time()
@@ -198,31 +200,32 @@ def main():
             if event.type == pygame.QUIT:
                 running = False
             elif event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_SPACE:
-                    space = True
-                if event.key == pygame.K_p:
+                if event.key in [pygame.K_w, pygame.K_s, pygame.K_a, pygame.K_d, pygame.K_q, pygame.K_e, pygame.K_SPACE]:
+                    keysDown[event.key] = True
+                if event.key == pygame.K_p: # debug
                     print('camera pos:', cameraPos, '\ncamera rot:', cameraRotation)
+            elif event.type == pygame.KEYUP:
+                if event.key in [pygame.K_w, pygame.K_s, pygame.K_a, pygame.K_d, pygame.K_q, pygame.K_e, pygame.K_SPACE]:
+                    keysDown[event.key] = False
+        
         # controls
-        # TODO: capture also short key presses with pygame.KEYDOWN event
         speedScalingFactor = cameraMovementSpeed * numSecsPassed
         moveVectorForward = Vector2(math.cos(cameraRotation.z), math.sin(cameraRotation.z)) * speedScalingFactor
         moveVectorSideways = Vector2(-math.sin(cameraRotation.z), math.cos(cameraRotation.z)) * speedScalingFactor
 
-        keys = pygame.key.get_pressed()
-        if keys[pygame.K_w]:
+        if keysDown[pygame.K_w]:
             cameraPos.xy += moveVectorForward
-        if keys[pygame.K_s]:
+        if keysDown[pygame.K_s]:
             cameraPos.xy -= moveVectorForward
-        if keys[pygame.K_a]:
+        if keysDown[pygame.K_a]:
             cameraPos.xy -= moveVectorSideways
-        if keys[pygame.K_d]:
+        if keysDown[pygame.K_d]:
             cameraPos.xy += moveVectorSideways
-        if keys[pygame.K_e]:
-            cameraRotation.z += cameraRotationSpeed * numSecsPassed
-        if keys[pygame.K_q]:
+        if keysDown[pygame.K_q]:
             cameraRotation.z -= cameraRotationSpeed * numSecsPassed
-        if space:
-            space = False
+        if keysDown[pygame.K_e]:
+            cameraRotation.z += cameraRotationSpeed * numSecsPassed
+        if keysDown[pygame.K_SPACE]:
             if not airTime:
                 cameraSpeed.z = cameraJumpStartVelocity
                 airTime = True
