@@ -81,9 +81,15 @@ def chopPointsIntoTris(points):
     tris[:, :, 1, 1, :] = points[1:,  1:, :]
     tris[:, :, 1, 2, :] = points[1:, :-1, :]
     return tris.reshape(tris.shape[0] * tris.shape[1] * 2, 3, 2)
-def getSurfaceHeight(cameraPos):
+def getSurfaceHeight(cameraPos, playerHeight=1.5):
     adjacentSquares = getPointsArr(int(cameraPos.x), int(cameraPos.y), int(cameraPos.x)+2, int(cameraPos.y)+2)
-    return np.max( adjacentSquares[:, :, 2] ) + 1.5
+    cameraFractX = cameraPos.x % 1
+    cameraFractY = cameraPos.y % 1
+    a = adjacentSquares[0, :, 2]
+    b = adjacentSquares[1, :, 2]
+    newA, newB = cameraFractY * (b - a) + a
+    height = cameraFractX * (newB - newA) + newA
+    return height + playerHeight
 
 def indep_roll(arr, shifts):
     if arr.shape[0] == 0:
@@ -225,7 +231,6 @@ def main():
         surfaceHeight = getSurfaceHeight(cameraPos)
         cameraPos += numSecsPassed * (cameraSpeed + gravity * numSecsPassed/2)
         cameraSpeed += gravity * numSecsPassed
-        # TODO: prevent the screen from shaking too much
         if not airTime and cameraPos.z <= surfaceHeight + .5:
             cameraPos.z = surfaceHeight
             cameraSpeed += gravity * 6
