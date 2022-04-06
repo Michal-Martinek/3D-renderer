@@ -1,7 +1,9 @@
 from pygame.math import Vector3, Vector2
 from pygame import draw
 import numpy as np
+import math
 
+# TODO: remove?
 point2 = Vector2
 point3 = Vector3
 square = tuple[point3, point3, point3, point3]
@@ -12,60 +14,135 @@ invalidPoint = Vector2(-1000)
 
 # TODO: remove deprecated functions
 # render ------------------------------
-def renderPoint(p: point3, cameraPos: point3, cameraRotation: Vector3, screenSize: Vector2, fov: float = 1.):
-    '''renders point onto screen, if it\'s behind screen returns invalid point'''
-    p = p - cameraPos
-    p.rotate_z_ip_rad(-cameraRotation.z)
-    p.rotate_y_ip_rad(-cameraRotation.y)
-    p.rotate_x_ip_rad(-cameraRotation.x)    
-    if p.x > 0:
-        p /= fov * p.x
-        return Vector2(p.y * screenSize.x, p.z * -screenSize.y) + screenSize
-    return invalidPoint
+def rotate_z(points, a):
+    newPoints = np.zeros_like(points)
+    cosVal, sinVal = math.cos(a), math.sin(a)
+    newPoints[:, :, 0] = points[:, :, 0] * cosVal - points[:, :, 1] * sinVal
+    newPoints[:, :, 1] = points[:, :, 0] * sinVal + points[:, :, 1] * cosVal
+    newPoints[:, :, 2] = points[:, :, 2]
+    return newPoints
+def rotate_y(points, a):
+    newPoints = np.zeros_like(points)
+    cosVal, sinVal = math.cos(a), math.sin(a)
+    newPoints[:, :, 0] = points[:, :, 0] * cosVal + points[:, :, 2] * sinVal
+    newPoints[:, :, 1] = points[:, :, 1]
+    newPoints[:, :, 2] = -points[:, :, 0] * sinVal + points[:, :, 2] * cosVal
+    return newPoints
+def rotate_x(points, a):
+    newPoints = np.zeros_like(points)
+    cosVal, sinVal = math.cos(a), math.sin(a)
+    newPoints[:, :, 0] =  points[:, :, 0]
+    newPoints[:, :, 1] = points[:, :, 1] * cosVal - points[:, :, 2] * sinVal
+    newPoints[:, :, 2] = points[:, :, 1] * sinVal + points[:, :, 2] * cosVal
+    return newPoints
+
+# NOTE: tris is a np.array of shape (n, 3, 3) not a struct array
+def renderTris(tris, cameraPos, cameraRotation, screenSize, closePlaneDistance=1.):
+    tris -= np.array( ((cameraPos.xyz)) )
+    # rotate
+    # TODO: merge the rotations into single function
+    tris = rotate_z(tris, -cameraRotation.z)
+    tris = rotate_y(tris, -cameraRotation.y)
+    tris = rotate_x(tris, -cameraRotation.x)
+    distances = tris[:, 0, 0] # TODO: better calculation of triangle's distance from camera
+    points2D = tris[:, :, 1:]
+    behindCamArr = tris[:, :, :1] <= 0
+    points2D *= closePlaneDistance / (tris[:, :, :1] - behindCamArr)
+    screenSize = screenSize / 2
+    points2D *= np.array((((screenSize.x, -screenSize.y))))
+    points2D += np.array(((screenSize.xy)))
+
+    # remove points which are not in front of the camera
+    points2D = points2D * (1. - behindCamArr) -1000 * behindCamArr
+    return points2D, distances
+    
+# clipping --------------------------------------------
+def indep_roll(arr, shifts):
+    if arr.shape[0] == 0:
+        return arr
+    return np.array([np.roll(row, x, axis=0) for row,x in zip(arr, shifts)])
+
+def clipTriangles1Boundary(tris, boundary, axis, boundaryTop=True):
+    # count points inside the screen
+    if boundaryTop:
+        countInside = np.count_nonzero(tris['points'][:, :, axis] < boundary, axis=1)
+    else:
+        countInside = np.count_nonzero(tris['points'][:, :, axis] > boundary, axis=1)
+
+    # moving the point so that the good points is up front
+    oneIn = tris[countInside == 1]['points']
+    if boundaryTop:
+        inPoints = oneIn[:, :, axis] < boundary
+    else:
+        inPoints = oneIn[:, :, axis] > boundary
+    correctPointIdx = np.nonzero(inPoints) [1]
+    oneIn = indep_roll(oneIn, -correctPointIdx)
+
+    # clipping the oneTri
+    inPoint = oneIn[:, :1]
+    vectors = oneIn[:, 1:] - inPoint
+    if boundaryTop:
+        vectors *= (boundary - inPoint[:, :, axis:axis+1]) / (vectors[:, :, axis:axis+1])
+    else:
+        vectors *= (-inPoint[:, :, axis:axis+1]) / (vectors[:, :, axis:axis+1])
+
+    vectors += inPoint
+    oneStructs = tris[countInside == 1].copy()
+    oneStructs['points'] = np.concatenate((inPoint, vectors), axis=1)
+
+    # two
+    twoIn = tris[countInside == 2]['points']
+    if boundaryTop:
+        outPoints = twoIn[:, :, axis] >= boundary
+    else:
+        outPoints = twoIn[:, :, axis] <= boundary
+    correctPointIdx = np.nonzero(outPoints) [1]
+    twoIn = indep_roll(twoIn, -correctPointIdx)
+
+    goodPoints = twoIn[:, 1:]
+    vectors = twoIn[:, :1] - goodPoints
+    if boundaryTop:
+        vectors *= (boundary - goodPoints[:, :, axis:axis+1]) / vectors[:, :, axis:axis+1]
+    else:
+        vectors *= (-goodPoints[:, :, axis:axis+1]) / vectors[:, :, axis:axis+1]
+    vectors += goodPoints
+
+    twoStructs1 = (tris[countInside == 2]).copy()
+    twoStructs2 = twoStructs1.copy()
+    twoStructs1['points'] = np.concatenate( (twoIn[:, 1:], vectors[:, 1:]), axis=1)
+    twoStructs2['points'] = np.concatenate((twoIn[:, 1:2], vectors[:, ::-1]), axis=1)
+
+    out = np.concatenate((tris[countInside == 3], oneStructs, twoStructs1, twoStructs2), axis=0)
+    return out
+        
+def clipTriangles(tris, screenSize):
+    tris = clipTriangles1Boundary(tris, screenSize, 1, True)
+    tris = clipTriangles1Boundary(tris, screenSize, 0, True)
+    tris = clipTriangles1Boundary(tris, 0, 1, False)
+    tris = clipTriangles1Boundary(tris, 0, 0, False)
+    return tris
+
+# pipeline ---------------------
+def renderPipeline(tris, cameraPos, cameraRotation, screenSize):
+    tris2D = np.ndarray(tris.shape[0], dtype=[('color', 'u1', 3), ('points', 'f4', (3, 2)), ('camDistance', 'f4')])
+    tris2D['color'] = tris['color']
+    tris2D['points'], tris2D['camDistance'] = renderTris(tris['points'], cameraPos, cameraRotation, Vector2((screenSize, screenSize)))
+    
+    # remove tris marked as behind the cam during rendering 
+    truthTable = np.any(np.all(tris2D['points'] == -1000, axis=2), axis=1)
+    tris2D = tris2D[np.logical_not(truthTable)]
+    # TODO: don't render triangles which are fully behind another ones
+    tris2D = clipTriangles(tris2D, screenSize)
+    tris2D[::-1].sort(order='camDistance')
+    return tris2D
+
 
 # draw ----------------------
-def drawTriangles(triangles: list[triangle3], display, color=(0, 160, 30)):
-    for t in triangles:
-        draw.polygon(display, color, t)
-        # draw.polygon(display, boundaryColor, t, 3)
-def generateColor(height):
-    v = 90 + int(height * 20)
-    v = min(max(v, 0), 255)
-    return (0, v, 30)
-def drawTerrainCollored(triangles: np.ndarray, display, boundaryColor=(0, 0, 0), screenSize=700):
-    for i in range(triangles.shape[0]):
-        points = triangles[i]['points'].tolist()
-        color = triangles[i]['color'].tolist()
-        draw.polygon(display, color, points)
+def drawTerrainCollored(triangles: np.ndarray, display, boundaryColor=(0, 0, 0)):
+    points = triangles['points'].tolist()
+    colors = triangles['color'].tolist()
+    for p, c in zip(points, colors):
+        # points = triangles[i]['points'].tolist()
+        # color = triangles[i]['color'].tolist()
+        draw.polygon(display, c, p)
         # draw.polygon(display, boundaryColor, points, 1)
-
-# classes ----------------------
-class Triangle2:
-    @ staticmethod
-    def fromArr(a):
-        return Triangle2(Vector2(*a[0]), Vector2(*a[1]), Vector2(*a[2]))
-    def toArr(self):
-        return [(int(p.x), int(p.y)) for p in self.points]
-
-    def __init__(self, p1: Vector2, p2: Vector2, p3: Vector2) -> None:
-        self.points = [p1, p2, p3]
-    def onScreen(self, screenSize) -> bool:
-        p1, p2, p3 = self.points
-        b = (-10 <= p1.x < screenSize + 10 and -10 <= p1.y < screenSize + 10)
-        b = b or (-10 <= p2.x < screenSize + 10 and -10 <= p2.y < screenSize + 10)
-        b = b or (-10 <= p3.x < screenSize + 10 and -10 <= p3.y < screenSize + 10)
-        return b
-    def clockwise(self) -> bool:
-        '''returns if the triangle has clockwise order of points (True) or anticlockwise (False)'''
-        ab = self.points[1] - self.points[0]
-        ac = self.points[2] - self.points[0]
-        return ab.cross(ac) >= 0
-    def shouldDraw(self, screenSize: float) -> bool:
-        '''returns whether this triangle should be drawn'''
-        return self.onScreen(screenSize) and self.clockwise()
-
-def render(points: triangle3, cameraPos: point3, cameraRotation: tuple[float, float, float], screenSize: Vector2) -> Triangle2:
-    p1 = renderPoint(points[0], cameraPos, cameraRotation, screenSize)
-    p2 = renderPoint(points[1], cameraPos, cameraRotation, screenSize)
-    p3 = renderPoint(points[2], cameraPos, cameraRotation, screenSize)
-    return Triangle2(p1, p2, p3, points[0].z)
