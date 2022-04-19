@@ -37,24 +37,28 @@ def rotate_x(points, a):
     return newPoints
 
 # NOTE: tris is a np.array of shape (n, 3, 3) not a struct array
-def renderTris(tris, cameraPos, cameraRotation, screenSize, closePlaneDistance=1.):
+def renderTris(tris, cameraPos, cameraRotation, screenSize, closePlaneDistance):
     tris -= np.array( ((cameraPos.xyz)) )
     # rotate
     # TODO: merge the rotations into single function
     tris = rotate_z(tris, -cameraRotation.z)
     tris = rotate_y(tris, -cameraRotation.y)
     tris = rotate_x(tris, -cameraRotation.x)
+
+    behindTris = np.all(tris[:, :, 0] <= 0, axis=1)
+    tris[:, :, 0] = np.maximum(tris[:, :, 0], 0.01)
     distances = tris[:, 0, 0] # TODO: better calculation of triangle's distance from camera
+
     points2D = tris[:, :, 1:]
-    behindCamArr = tris[:, :, :1] <= 0
-    points2D *= closePlaneDistance / (tris[:, :, :1] - behindCamArr)
+    points2D *= closePlaneDistance / (tris[:, :, :1])
     screenSize = screenSize / 2
     points2D *= np.array((((screenSize.x, -screenSize.y))))
     points2D += np.array(((screenSize.xy)))
 
     # remove points which are not in front of the camera
-    points2D = points2D * (1. - behindCamArr) -1000 * behindCamArr
-    return points2D, distances
+    if np.any( np.isnan(points2D) ):
+        raise RuntimeError('renderTris produced result with \'nan\'s')
+    return points2D, distances, behindTris
     
 # clipping --------------------------------------------
 def indep_roll(arr, shifts):
@@ -123,14 +127,13 @@ def clipTriangles(tris, screenSize):
     return tris
 
 # pipeline ---------------------
-def renderPipeline(tris, cameraPos, cameraRotation, screenSize):
+def renderPipeline(tris, cameraPos, cameraRotation, screenSize, closePlaneDistance):
     tris2D = np.ndarray(tris.shape[0], dtype=[('color', 'u1', 3), ('points', 'f4', (3, 2)), ('camDistance', 'f4')])
     tris2D['color'] = tris['color']
-    tris2D['points'], tris2D['camDistance'] = renderTris(tris['points'], cameraPos, cameraRotation, Vector2((screenSize, screenSize)))
+    tris2D['points'], tris2D['camDistance'], behindTris = renderTris(tris['points'], cameraPos, cameraRotation, Vector2((screenSize, screenSize)), closePlaneDistance)
     
     # remove tris marked as behind the cam during rendering 
-    truthTable = np.any(np.all(tris2D['points'] == -1000, axis=2), axis=1)
-    tris2D = tris2D[np.logical_not(truthTable)]
+    tris2D = tris2D[np.logical_not(behindTris)]
     # TODO: don't render triangles which are fully behind another ones
     tris2D = clipTriangles(tris2D, screenSize)
     tris2D[::-1].sort(order='camDistance')
@@ -142,7 +145,5 @@ def drawTerrainCollored(triangles: np.ndarray, display, boundaryColor=(0, 0, 0))
     points = triangles['points'].tolist()
     colors = triangles['color'].tolist()
     for p, c in zip(points, colors):
-        # points = triangles[i]['points'].tolist()
-        # color = triangles[i]['color'].tolist()
         draw.polygon(display, c, p)
-        # draw.polygon(display, boundaryColor, points, 1)
+        # draw.polygon(display, boundaryColor, p, 1)

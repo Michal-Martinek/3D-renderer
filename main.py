@@ -18,6 +18,7 @@ def getCameraPlanes(cameraPos: point3, cameraRotation: Vector3, farPlaneDistance
     closePlanePoints = [p + cameraPos for p in closePlanePoints]
     return closePlanePoints, farPlanePoints
 
+# TODO: remove the slow vnoise - implementation at https://github.com/plottertools/vnoise/blob/main/vnoise/vnoise.py
 vnoiseObj = vnoise.Noise()
 def terrainGenerator(minX, minY, maxX, maxY, tilesize=8.40, scale=8):
     heights = vnoiseObj.noise2(np.arange(minY, maxY)/tilesize, np.arange(minX, maxX)/tilesize)
@@ -40,10 +41,10 @@ def chopPointsIntoTris(points):
     tris[:, :, 1, 1, :] = points[1:,  1:, :]
     tris[:, :, 1, 2, :] = points[1:, :-1, :]
     return tris.reshape(tris.shape[0] * tris.shape[1] * 2, 3, 3)
-def getVisibleMapSquare(cameraPos, cameraRotation, farPlaneDistance, closePlaneDistance):
+def getVisibleMapSquare(cameraPos, cameraRotation, farPlaneDistance, closePlaneDistance): # TODO: consider also the player not only the camera planes
     closePlane, farPlane = getCameraPlanes(cameraPos, cameraRotation, farPlaneDistance, closePlaneDistance)
-    minX, maxX = int(min(closePlane+farPlane, key=lambda p: p.x).x) - 1, int(max(closePlane+farPlane, key=lambda p: p.x).x) + 1
-    minY, maxY = int(min(closePlane+farPlane, key=lambda p: p.y).y) - 1, int(max(closePlane+farPlane, key=lambda p: p.y).y) + 1
+    minX, maxX = int(min(closePlane+farPlane, key=lambda p: p.x).x) - 2, int(max(closePlane+farPlane, key=lambda p: p.x).x) + 2
+    minY, maxY = int(min(closePlane+farPlane, key=lambda p: p.y).y) - 2, int(max(closePlane+farPlane, key=lambda p: p.y).y) + 2
     return (minX, maxX, minY, maxY)
 def generateColor(tris, baseColor=(0, 90, 30), scale=20):
     heights = tris['points'][:, 0, 2]
@@ -161,7 +162,7 @@ def main():
 
         # rendering
         tris = getTriangles(cameraPos, cameraRotation, farPlaneDistance, closePlaneDistance)
-        tris2D = renderPipeline(tris, cameraPos, cameraRotation, screenSize)
+        tris2D = renderPipeline(tris, cameraPos, cameraRotation, screenSize, closePlaneDistance)
 
         # drawing
         display.fill((2,204,254))
