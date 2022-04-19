@@ -79,8 +79,15 @@ def main():
     screenSize = 700
     display = pygame.display.set_mode((screenSize, screenSize), pygame.DOUBLEBUF)
     pygame.event.set_blocked(None)
-    pygame.event.set_allowed([pygame.QUIT, pygame.KEYDOWN, pygame.KEYUP])
+    pygame.event.set_allowed([pygame.QUIT, pygame.KEYDOWN, pygame.KEYUP, pygame.MOUSEMOTION])
     frameClock = pygame.time.Clock()
+
+    # mouse
+    crossPos = pygame.Vector2((screenSize/2, screenSize/2))
+    crossRects = [(crossPos.x, crossPos.y-4, 2, 10), (crossPos.x-4, crossPos.y, 10, 2)]
+    lastMouseRel = (0, 0)
+    pygame.mouse.set_visible(False)
+    pygame.mouse.set_pos(crossPos)
 
     # TODO: use the fogSurface
     fogSurface = pygame.Surface((screenSize, screenSize))
@@ -105,7 +112,7 @@ def main():
     gravity = Vector3(0, 0, -2.)
 
     keysDown = {x: False for x in [pygame.K_w, pygame.K_s, pygame.K_a, pygame.K_d, pygame.K_q, pygame.K_e, pygame.K_SPACE]}
-    
+
     # inner vars
     startFrameTime = time.time()
     running = True
@@ -113,6 +120,8 @@ def main():
         temp = startFrameTime
         startFrameTime = time.time()
         numSecsPassed = startFrameTime - temp
+
+        mouseMotions = pygame.Vector2((0, 0))
 
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
@@ -125,7 +134,18 @@ def main():
             elif event.type == pygame.KEYUP:
                 if event.key in [pygame.K_w, pygame.K_s, pygame.K_a, pygame.K_d, pygame.K_q, pygame.K_e, pygame.K_SPACE]:
                     keysDown[event.key] = False
-        
+            elif event.type == pygame.MOUSEMOTION:
+                mouseMotions += event.rel
+
+        mouseMotions -= lastMouseRel
+        lastMouseRel = crossPos - pygame.Vector2( pygame.mouse.get_pos() )
+        pygame.mouse.set_pos(crossPos)
+
+
+        # cam rotations
+        cameraRotation.y += mouseMotions.y / 100
+        cameraRotation.z += mouseMotions.x / 100
+
         # controls
         speedScalingFactor = cameraMovementSpeed * numSecsPassed
         moveVectorForward = Vector2(math.cos(cameraRotation.z), math.sin(cameraRotation.z)) * speedScalingFactor
@@ -140,9 +160,9 @@ def main():
         if keysDown[pygame.K_d]:
             cameraPos.xy += moveVectorSideways
         if keysDown[pygame.K_q]:
-            cameraRotation.z -= cameraRotationSpeed * numSecsPassed
+            cameraRotation.x += cameraRotationSpeed * numSecsPassed
         if keysDown[pygame.K_e]:
-            cameraRotation.z += cameraRotationSpeed * numSecsPassed
+            cameraRotation.x -= cameraRotationSpeed * numSecsPassed
         if keysDown[pygame.K_SPACE]:
             if not airTime:
                 cameraSpeed.z = cameraJumpStartVelocity
@@ -167,6 +187,8 @@ def main():
         # drawing
         display.fill((2,204,254))
         drawTerrainCollored(tris2D, display)
+        pygame.draw.rect(display, (128, 128, 128), crossRects[0])
+        pygame.draw.rect(display, (128, 128, 128), crossRects[1])
 
         pygame.display.update()
         frameClock.tick(30)
