@@ -129,8 +129,10 @@ def main():
             elif event.type == pygame.KEYDOWN:
                 if event.key in [pygame.K_w, pygame.K_s, pygame.K_a, pygame.K_d, pygame.K_q, pygame.K_e, pygame.K_SPACE]:
                     keysDown[event.key] = True
-                if event.key == pygame.K_p: # debug
+                elif event.key == pygame.K_p: # debug
                     print('camera pos:', cameraPos, '\ncamera rot:', cameraRotation)
+                elif event.key == pygame.K_ESCAPE:
+                    running = False
             elif event.type == pygame.KEYUP:
                 if event.key in [pygame.K_w, pygame.K_s, pygame.K_a, pygame.K_d, pygame.K_q, pygame.K_e, pygame.K_SPACE]:
                     keysDown[event.key] = False
@@ -144,6 +146,7 @@ def main():
 
         # cam rotations
         cameraRotation.y += mouseMotions.y / 100
+        cameraRotation.y = max(min(cameraRotation.y, 1), -1)
         cameraRotation.z += mouseMotions.x / 100
 
         # controls
@@ -159,10 +162,6 @@ def main():
             cameraPos.xy -= moveVectorSideways
         if keysDown[pygame.K_d]:
             cameraPos.xy += moveVectorSideways
-        if keysDown[pygame.K_q]:
-            cameraRotation.x += cameraRotationSpeed * numSecsPassed
-        if keysDown[pygame.K_e]:
-            cameraRotation.x -= cameraRotationSpeed * numSecsPassed
         if keysDown[pygame.K_SPACE]:
             if not airTime:
                 cameraSpeed.z = cameraJumpStartVelocity
