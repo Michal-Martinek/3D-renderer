@@ -41,10 +41,14 @@ def chopPointsIntoTris(points):
     tris[:, :, 1, 1, :] = points[1:,  1:, :]
     tris[:, :, 1, 2, :] = points[1:, :-1, :]
     return tris.reshape(tris.shape[0] * tris.shape[1] * 2, 3, 3)
-def getVisibleMapSquare(cameraPos, cameraRotation, farPlaneDistance, closePlaneDistance): # TODO: consider also the player not only the camera planes
+def getVisibleMapSquare(cameraPos, cameraRotation, farPlaneDistance, closePlaneDistance):
     closePlane, farPlane = getCameraPlanes(cameraPos, cameraRotation, farPlaneDistance, closePlaneDistance)
-    minX, maxX = int(min(closePlane+farPlane, key=lambda p: p.x).x) - 2, int(max(closePlane+farPlane, key=lambda p: p.x).x) + 2
-    minY, maxY = int(min(closePlane+farPlane, key=lambda p: p.y).y) - 2, int(max(closePlane+farPlane, key=lambda p: p.y).y) + 2
+    minX, maxX = min(closePlane+farPlane, key=lambda p: p.x).x, max(closePlane+farPlane, key=lambda p: p.x).x
+    minY, maxY = min(closePlane+farPlane, key=lambda p: p.y).y, max(closePlane+farPlane, key=lambda p: p.y).y
+    minX = int(min(minX, cameraPos.x)) - 1
+    maxX = int(max(maxX, cameraPos.x)) + 1
+    minY = int(min(minY, cameraPos.y)) - 1
+    maxY = int(max(maxY, cameraPos.y)) + 1
     return (minX, maxX, minY, maxY)
 def generateColor(tris, baseColor=(0, 90, 30), scale=20):
     heights = tris['points'][:, 0, 2]
@@ -111,7 +115,7 @@ def main():
     cameraJumpStartVelocity = 2.5
     gravity = Vector3(0, 0, -2.)
 
-    keysDown = {x: False for x in [pygame.K_w, pygame.K_s, pygame.K_a, pygame.K_d, pygame.K_q, pygame.K_e, pygame.K_SPACE]}
+    keysDown = {x: False for x in [pygame.K_w, pygame.K_s, pygame.K_a, pygame.K_d, pygame.K_SPACE]}
 
     # inner vars
     startFrameTime = time.time()
@@ -127,14 +131,14 @@ def main():
             if event.type == pygame.QUIT:
                 running = False
             elif event.type == pygame.KEYDOWN:
-                if event.key in [pygame.K_w, pygame.K_s, pygame.K_a, pygame.K_d, pygame.K_q, pygame.K_e, pygame.K_SPACE]:
+                if event.key in [pygame.K_w, pygame.K_s, pygame.K_a, pygame.K_d, pygame.K_SPACE]:
                     keysDown[event.key] = True
                 elif event.key == pygame.K_p: # debug
                     print('camera pos:', cameraPos, '\ncamera rot:', cameraRotation)
                 elif event.key == pygame.K_ESCAPE:
                     running = False
             elif event.type == pygame.KEYUP:
-                if event.key in [pygame.K_w, pygame.K_s, pygame.K_a, pygame.K_d, pygame.K_q, pygame.K_e, pygame.K_SPACE]:
+                if event.key in [pygame.K_w, pygame.K_s, pygame.K_a, pygame.K_d, pygame.K_SPACE]:
                     keysDown[event.key] = False
             elif event.type == pygame.MOUSEMOTION:
                 mouseMotions += event.rel
