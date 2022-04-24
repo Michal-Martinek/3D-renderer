@@ -62,10 +62,40 @@ def constructTriangles(points):
     generateColor(tris)
     return tris
 
+def colorClouds(tris, baseColor=(255, 255, 255), scale=40):
+    heights = tris['points'][:, 1, 2] - 10
+    tris['color'] = baseColor
+    tris['color'] -= (heights * scale).astype('u1')[:, np.newaxis]
+    return tris
+
+def constructClouds(points):
+    triangles = chopPointsIntoTris(points)
+    triangles = triangles[triangles[:, 0, 2] < 12]
+    tris = np.ndarray(triangles.shape[0], dtype=[('color', 'u1', 3), ('points', 'f4', (3, 3))])
+    tris['points'] = triangles
+    colorClouds(tris)
+    return tris
+def cloudGenerator(minX, minY, maxX, maxY, tilesize=6, scale=4, base=10., offset=50):
+    heights = vnoiseObj.noise2(np.arange(minY+offset, maxY+offset)/tilesize, np.arange(minX+offset, maxX+offset)/tilesize)
+    heights += 0.75
+    heights *= scale / 1.5
+    # heights **= 2
+    heights += base
+    return heights
+def getCloudsArr(minX, maxX, minY, maxY):
+    points = np.ndarray(( maxY-minY, maxX-minX, 3))
+    points[:, :, 0] = np.reshape( np.tile( np.arange(minX, maxX), maxY-minY), points.shape[:2])
+    points[:, :, 1] = np.reshape( np.repeat( np.arange(minY, maxY), maxX-minX), points.shape[:2])
+    points[:, :, 2] = cloudGenerator(minX, minY, maxX, maxY)
+    return points
+
 def getTriangles(cameraPos, cameraRotation, farPlaneDistance, closePlaneDistance):
     boundaries = getVisibleMapSquare(cameraPos, cameraRotation, farPlaneDistance, closePlaneDistance)    
     points = getPointsArr(*boundaries)
-    return constructTriangles(points)
+    clouds = getCloudsArr(*boundaries)
+    clouds = constructClouds(clouds)
+    return np.concatenate((constructTriangles(points), clouds))
+
 # TODO: merge this into the rendering so we don't have to call vnoise twice
 def getSurfaceHeight(cameraPos, playerHeight=1.5):
     adjacentSquares = getPointsArr(int(cameraPos.x), int(cameraPos.x)+2, int(cameraPos.y), int(cameraPos.y)+2)
